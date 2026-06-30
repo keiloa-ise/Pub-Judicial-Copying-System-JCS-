@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node / Vite
+node_modules/
+web/dist/
+*.local
+
+# Secrets — never commit real signing keys or connection strings
+appsettings.*.Local.json
+appsettings.Development.json
+web/.env
+.env
+
+# Local NuGet workaround (large QuestPDF nupkg) — keep folder, ignore packages
+local-nuget/*.nupkg

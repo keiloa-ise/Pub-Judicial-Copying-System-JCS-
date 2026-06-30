@@ -1,0 +1,12 @@
+# Build artefacts & local-only files (keep the image small and free of secrets)
+**/bin/
+**/obj/
+**/.vs/
+tests/
+web/
+**/appsettings.Development.json
+**/appsettings.*.Local.json
+.git/
+.config/
+*.user
+*.md

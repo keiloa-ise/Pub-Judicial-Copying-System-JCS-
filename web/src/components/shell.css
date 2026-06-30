@@ -1,0 +1,95 @@
+/* Public shell styles (header, nav, hero) — ported from homepage-mockup.html.
+   Uses logical properties (inset-inline-*, border-inline-*) so the layout mirrors under RTL. */
+
+/* ── Header ── */
+.topbar { background: var(--white); border-bottom: 1px solid var(--gray-line); }
+.topbar__inner { display: flex; align-items: center; gap: 26px; min-height: 116px; padding: 16px 0; }
+.brand { display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
+.brand__name { line-height: 1.15; }
+.brand__name .ar { font-family: var(--font-ar); font-size: 24px; font-weight: 800; color: var(--green-800); display: block; }
+.brand__name .en { font-family: var(--font-en); font-size: 10px; letter-spacing: 1.5px; color: var(--gold); font-weight: 600; margin-top: 3px; display: block; }
+.brand__divider { width: 1px; height: 54px; background: var(--gray-line); }
+.spacer { flex: 1 1 auto; }
+
+.search { display: flex; align-items: center; gap: 10px; background: var(--white); border: 1.5px solid var(--gray-line); border-radius: 14px; padding: 12px 18px; width: 340px; max-width: 34vw; transition: border-color .15s ease; }
+.search:focus-within { border-color: var(--green-600); }
+.search input { border: 0; outline: 0; flex: 1; font-size: 15px; background: transparent; color: var(--ink); font-family: inherit; }
+.search svg { color: var(--green-700); flex: 0 0 auto; }
+
+.lang { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--green-800); font-weight: 600; font-size: 15px; background: none; border: 0; font-family: var(--font-ar); }
+
+.socials { display: flex; align-items: center; gap: 14px; }
+.socials a { width: 30px; height: 30px; display: grid; place-items: center; color: var(--green-800); transition: color .15s ease, transform .15s ease; }
+.socials a:hover { color: var(--gold); transform: translateY(-2px); }
+
+/* ── Nav ── */
+.nav { background: var(--green-800); }
+.nav__inner { display: flex; align-items: stretch; }
+.nav button { color: #eef4f0; background: none; border: 0; cursor: pointer; font-size: 16px; font-weight: 500; font-family: inherit; padding: 18px 26px; position: relative; white-space: nowrap; border-inline-end: 1px solid rgba(255,255,255,0.12); transition: background .15s ease; }
+.nav button:first-child { border-inline-start: 1px solid rgba(255,255,255,0.12); }
+.nav button:hover, .nav button.active { background: var(--green-700); }
+.nav button.active::after { content: ""; position: absolute; inset-inline: 22px; bottom: 0; height: 3px; background: var(--gold); border-radius: 3px 3px 0 0; }
+
+/* ── Hero ── */
+.hero { padding: 30px 0 48px; }
+.hero__card { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; min-height: 470px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); background: var(--gray-bg); }
+.hero__left { position: relative; padding: 56px 54px; display: flex; flex-direction: column; justify-content: center; z-index: 2; }
+.hero__left .geo { opacity: .35; }
+.hero__date { display: flex; align-items: center; gap: 8px; color: var(--green-700); font-size: 15px; font-weight: 600; margin-bottom: 18px; }
+.hero__title { font-size: 36px; line-height: 1.32; font-weight: 800; color: var(--ink); max-width: 560px; margin-bottom: 32px; }
+[dir="ltr"] .hero__title { font-weight: 700; }
+.btn-news { align-self: flex-start; background: #14201c; color: #fff; border: 0; padding: 15px 30px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .15s ease, transform .15s ease; }
+.btn-news:hover { background: var(--green-700); transform: translateY(-2px); }
+
+.hero__right { position: relative; background: radial-gradient(120% 120% at 80% 20%, var(--green-700) 0%, var(--green-900) 70%); display: grid; place-items: center; overflow: hidden; }
+.hero__right .geo { opacity: .5; }
+.hero__right::before { content: ""; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 28%; background: linear-gradient(to right, var(--gray-bg), transparent); }
+[dir="rtl"] .hero__right::before { transform: scaleX(-1); }
+.crest-watermark { position: relative; z-index: 1; text-align: center; }
+.crest-watermark .ar { display: block; font-family: var(--font-ar); color: var(--gold-200); font-weight: 800; font-size: 20px; margin-top: 14px; }
+
+.arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 5; width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.65); border: 1.5px solid rgba(9,48,36,0.15); display: grid; place-items: center; cursor: pointer; color: var(--green-800); transition: background .15s ease, transform .15s ease; }
+.arrow:hover { background: #fff; transform: translateY(-50%) scale(1.06); }
+.arrow--prev { inset-inline-start: -10px; }
+.arrow--next { inset-inline-end: -10px; }
+[dir="rtl"] .arrow svg { transform: scaleX(-1); }
+
+.dots { display: flex; justify-content: center; gap: 12px; margin-top: 22px; }
+.dots button { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--green-700); background: transparent; cursor: pointer; padding: 0; transition: background .15s ease; }
+.dots button.active { background: var(--green-700); }
+
+/* ── Auth button in header ── */
+.authbtn { font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; padding: 10px 18px; border-radius: 11px; border: 1.5px solid var(--green-700); background: transparent; color: var(--green-800); transition: background .15s ease, color .15s ease; }
+.authbtn:hover { background: var(--green-700); color: #fff; }
+.authbtn--primary { background: var(--green-800); color: #fff; border-color: var(--green-800); }
+.authbtn--primary:hover { background: var(--green-700); }
+
+/* ── Login ── */
+.login { display: grid; place-items: center; padding: 60px 22px; min-height: 60vh; }
+.login__card { width: 100%; max-width: 420px; background: var(--white); border: 1px solid var(--gray-line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 40px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.login__title { font-size: 26px; font-weight: 800; color: var(--green-800); margin-top: 12px; }
+.login__sub { font-size: 14px; color: var(--gold); margin-bottom: 18px; }
+.login__field { width: 100%; display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.login__field span { font-size: 14px; font-weight: 600; color: var(--ink); }
+.login__field input { font-family: inherit; font-size: 15px; padding: 12px 14px; border: 1.5px solid var(--gray-line); border-radius: 11px; outline: none; transition: border-color .15s ease; }
+.login__field input:focus { border-color: var(--green-600); }
+.login__error { width: 100%; background: #fdecec; color: #a12626; border: 1px solid #f3c2c2; border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
+.login__submit { width: 100%; background: var(--green-800); color: #fff; border: 0; padding: 14px; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background .15s ease; }
+.login__submit:hover:not(:disabled) { background: var(--green-700); }
+.login__submit:disabled { opacity: .6; cursor: default; }
+.login__hint { margin-top: 18px; font-size: 12.5px; color: #6b756f; text-align: center; line-height: 1.7; }
+.login__hint code { background: var(--gray-bg); padding: 1px 6px; border-radius: 5px; color: var(--green-800); }
+
+/* ── Dashboard placeholder ── */
+.dash { padding: 56px 22px; max-width: 760px; }
+.dash__title { font-size: 30px; font-weight: 800; color: var(--green-800); margin-bottom: 10px; }
+.dash__role { font-size: 16px; margin-bottom: 18px; }
+.dash__note { font-size: 15px; color: #6b756f; line-height: 1.8; background: var(--gray-bg); border-radius: 12px; padding: 18px 20px; }
+
+@media (max-width: 900px) {
+  .hero__card { grid-template-columns: 1fr; }
+  .hero__right { min-height: 220px; }
+  .hero__title { font-size: 28px; }
+  .nav__inner { overflow-x: auto; }
+  .search { display: none; }
+}

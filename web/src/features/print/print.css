@@ -1,0 +1,15 @@
+/* Print preview = the SERVER-rendered PDF shown in the browser's PDF viewer (FR-15). The document
+   layout, fonts, QR and "مسودة قرار" watermark are all produced server-side (QuestPDF); the client
+   only embeds the resulting bytes, so there is no editable DOM to tamper with before printing. */
+
+.pdfwrap { display: flex; flex-direction: column; height: calc(100vh - 130px); gap: 12px; }
+
+.print-toolbar { display: flex; gap: 12px; }
+
+.pdfframe {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--gray-line);
+  border-radius: 8px;
+  background: #525659;
+}

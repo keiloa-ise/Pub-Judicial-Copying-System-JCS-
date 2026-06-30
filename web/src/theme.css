@@ -1,0 +1,38 @@
+/* JCS theme tokens — ported from homepage-mockup.html (the design source of truth). */
+:root {
+  --green-900: #093024;
+  --green-800: #0d4536;
+  --green-700: #12533f;
+  --green-600: #1a6650;
+  --gold:      #b89456;
+  --gold-200:  #cdb079;
+  --gray-bg:   #f3f4f1;
+  --gray-line: #e3e5e0;
+  --ink:       #16211c;
+  --white:     #ffffff;
+  --radius:    18px;
+  --shadow:    0 18px 45px rgba(9, 48, 36, 0.10);
+  --font-en:   'Poppins', system-ui, 'Segoe UI', Arial, sans-serif;
+  --font-ar:   'Cairo', system-ui, 'Segoe UI', Tahoma, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-ar);
+  color: var(--ink);
+  background: #fbfbfa;
+  background-image: radial-gradient(circle at 12px 12px, rgba(184,148,86,0.04) 2px, transparent 2px);
+  background-size: 26px 26px;
+  -webkit-font-smoothing: antialiased;
+}
+[dir="ltr"] body { font-family: var(--font-en); }
+
+.wrap { max-width: 1480px; margin: 0 auto; padding: 0 22px; }
+
+/* shared geometric pattern tile (8-point star) */
+.geo {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23b89456' stroke-width='1' stroke-opacity='0.5'%3E%3Cpath d='M40 6 49 22 67 22 58 38 67 54 49 54 40 70 31 54 13 54 22 38 13 22 31 22z'/%3E%3Crect x='26' y='26' width='28' height='28' transform='rotate(45 40 40)'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 80px 80px;
+}
