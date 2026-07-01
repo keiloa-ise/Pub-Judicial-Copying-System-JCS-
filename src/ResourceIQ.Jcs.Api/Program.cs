@@ -9,7 +9,17 @@ using ResourceIQ.Jcs.Application.Abstractions;
 using ResourceIQ.Jcs.Infrastructure;
 using ResourceIQ.Jcs.Infrastructure.Security;
 
+// Local dev: load repo-root .env (ports, connection string, JWT key) before anything reads config.
+// No-op in containers / when values already come from the environment (see DotEnv).
+ResourceIQ.Jcs.Api.DotEnv.Load();
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Bind the HTTP port from configuration (API_PORT in .env) when provided, so the listen address is
+// .env-driven for local runs. Falls back to launchSettings / ASPNETCORE_URLS when unset.
+var apiPort = builder.Configuration["API_PORT"];
+if (!string.IsNullOrWhiteSpace(apiPort))
+    builder.WebHost.UseUrls($"http://localhost:{apiPort}");
 
 // ── Layers ────────────────────────────────────────────────────────────────
 builder.Services.AddJcsApplication();

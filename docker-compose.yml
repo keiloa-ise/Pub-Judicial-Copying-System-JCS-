@@ -5,7 +5,7 @@ services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     ports:
-      - "1433:1433"   # remote DB access (SSMS/Azure Data Studio). See DEPLOY.md → Remote DB access.
+      - "${DB_PORT:-1433}:1433"   # remote DB access (SSMS/Azure Data Studio). See DEPLOY.md → Remote DB access.
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${SA_PASSWORD}
@@ -45,7 +45,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
     ports:
-      - "80:80"      # add "443:443" + a TLS terminator (or front with host Nginx/Caddy) for HTTPS
+      - "${WEB_HTTP_PORT:-80}:80"      # add "443:443" + a TLS terminator (or front with host Nginx/Caddy) for HTTPS
     depends_on:
       - api
     restart: unless-stopped
