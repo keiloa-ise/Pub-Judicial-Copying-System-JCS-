@@ -2,7 +2,7 @@
  * Typed API client. Auth is JWT bearer; the token is obtained from
  * /api/auth/login. Authorization is always enforced server-side — this client never assumes it.
  */
-const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:5000";
+const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 let token: string | null = null;
 export function setToken(t: string | null) { token = t; }
