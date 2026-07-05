@@ -14,6 +14,9 @@ const GREGORIAN_KEY = "issueGregorian";
 const HIJRI_KEY = "issueHijri";
 /** Fixed key under which the president's chosen title (صفة) is stored in the field values. */
 const PRESIDENT_TITLE_KEY = "presidentTitle";
+/** «رقم القرار»: auto-generated — mirrors the copy's own auto sequential number (copyNumber).
+ *  The copyist never types it; the field renders read-only, pre-filled from copyNumber. */
+const DECISION_NUMBER_KEY = "decisionNumber";
 
 /** Client-only stable ids for section editor rows (keep rich-text instances stable on reorder). */
 let _sid = 0;
@@ -91,7 +94,12 @@ export function PreparePage({ id }: { id: string }) {
       setDetail(d); setForms(f); setJudges(jdg); setTitles(tts);
       setLastReturn(a.find((x) => x.action === "Return" && x.reason) ?? null);
       setFormTemplateId(d.formTemplateId ?? "");
-      try { setValues(JSON.parse(d.fieldValuesJson || "{}")); } catch { setValues({}); }
+      try {
+        const parsedValues = JSON.parse(d.fieldValuesJson || "{}");
+        // «رقم القرار» is auto-generated = the copy's own number; never typed by the copyist.
+        if (d.copyNumber) parsedValues[DECISION_NUMBER_KEY] = d.copyNumber;
+        setValues(parsedValues);
+      } catch { setValues(d.copyNumber ? { [DECISION_NUMBER_KEY]: d.copyNumber } : {}); }
       try {
         const parsed = JSON.parse(d.sectionsJson || "[]");
         setSections(Array.isArray(parsed)
@@ -282,6 +290,16 @@ export function PreparePage({ id }: { id: string }) {
                         onPick={(v) => setValues((vv) => ({ ...vv, [PRESIDENT_TITLE_KEY]: v }))} />
                     </div>
                   </div>
+                ) : fld.key === DECISION_NUMBER_KEY ? (
+                  <label className="field" key={fld.id}>
+                    <span>{fld.label} — {L("يُولَّد تلقائيًا", "auto-generated")}</span>
+                    <input
+                      type="text"
+                      value={detail.copyNumber ?? values[fld.key] ?? ""}
+                      readOnly
+                      title={L("رقم القرار يُولَّد تلقائيًا من رقم النسخة", "The decision number is auto-generated from the copy number")}
+                    />
+                  </label>
                 ) : (
                   <label className="field" key={fld.id}>
                     <span>{fld.label}</span>
