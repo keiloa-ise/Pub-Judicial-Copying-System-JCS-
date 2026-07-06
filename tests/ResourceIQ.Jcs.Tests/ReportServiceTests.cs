@@ -1,6 +1,7 @@
 using ResourceIQ.Jcs.Application.Common;
 using ResourceIQ.Jcs.Application.Reports;
 using ResourceIQ.Jcs.Domain.Enums;
+using ResourceIQ.Jcs.Domain.Rules;
 using Xunit;
 
 namespace ResourceIQ.Jcs.Tests;
@@ -94,5 +95,26 @@ public class ReportServiceTests
 
         Assert.Equal(1, res.Page);        // page floored to 1
         Assert.Equal(50, res.PageSize);   // oversized pageSize reset to default
+    }
+
+    [Fact]
+    public async Task Start_date_after_end_date_is_rejected()
+    {
+        var (svc, _, _) = Make(Role.Administrator);
+        var filter = new ReportFilter(
+            FromDate: new DateOnly(2026, 6, 10), ToDate: new DateOnly(2026, 6, 1));
+
+        await Assert.ThrowsAsync<DomainException>(() => svc.ByCourtAsync(filter, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Equal_start_and_end_date_is_accepted()
+    {
+        var (svc, q, _) = Make(Role.Administrator);
+        var same = new DateOnly(2026, 6, 10);
+        await svc.ByCourtAsync(new ReportFilter(FromDate: same, ToDate: same), CancellationToken.None);
+
+        Assert.Equal(same, q.LastFilter!.FromDate);
+        Assert.Equal(same, q.LastFilter.ToDate);
     }
 }

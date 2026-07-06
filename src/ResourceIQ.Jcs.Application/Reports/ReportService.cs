@@ -3,6 +3,7 @@ using ResourceIQ.Jcs.Application.Abstractions;
 using ResourceIQ.Jcs.Application.Common;
 using ResourceIQ.Jcs.Application.Security;
 using ResourceIQ.Jcs.Domain.Enums;
+using ResourceIQ.Jcs.Domain.Rules;
 
 namespace ResourceIQ.Jcs.Application.Reports;
 
@@ -63,9 +64,15 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
         };
     }
 
-    /// <summary>Strips client-supplied actor filters for scoped roles (they are pinned via scope).</summary>
-    private ReportFilter Safe(ReportFilter f) =>
-        currentUser.Role == Role.Administrator ? f : f with { CopyistId = null, ReviewerId = null };
+    /// <summary>Validates the date range and strips client-supplied actor filters for scoped roles
+    /// (they are pinned via scope). Every report + export method passes through here, so this is the
+    /// single choke point for both concerns — the client is never trusted (BR-06 posture).</summary>
+    private ReportFilter Safe(ReportFilter f)
+    {
+        if (f.FromDate is { } from && f.ToDate is { } to && from > to)
+            throw new DomainException("يجب أن يكون تاريخ البداية أقل من تاريخ النهاية أو يساويه.");
+        return currentUser.Role == Role.Administrator ? f : f with { CopyistId = null, ReviewerId = null };
+    }
 
     // ── Export: build a flat table for a report type (all matching rows; no paging) ──
     public async Task<ReportTable> BuildTableAsync(ReportType type, ReportFilter filter, CancellationToken ct)

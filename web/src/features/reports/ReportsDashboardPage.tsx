@@ -83,7 +83,14 @@ export function ReportsDashboardPage() {
 
   useEffect(() => { load(filter, tab, page); }, [load, filter, tab, page]);
 
-  function apply() { setPage(1); setFilter(draft); }
+  function apply() {
+    if (draft.fromDate && draft.toDate && draft.fromDate > draft.toDate) {
+      setErr(L("«من تاريخ» يجب أن يكون قبل «إلى تاريخ» أو يساويه. الرجاء تصحيح تاريخ البداية.",
+        "The start date must be before or equal to the end date. Please correct the start date."));
+      return;
+    }
+    setPage(1); setFilter(draft);
+  }
   function reset() { setDraft({}); setPage(1); setFilter({}); }
   const patch = (p: Partial<ReportFilter>) => setDraft((d) => ({ ...d, ...p }));
 
@@ -96,9 +103,11 @@ export function ReportsDashboardPage() {
       <form className="card filterbar" onSubmit={(e) => { e.preventDefault(); apply(); }}>
         <div className="row">
           <label className="field"><span>{L("من تاريخ", "From date")}</span>
-            <input type="date" value={draft.fromDate ?? ""} onChange={(e) => patch({ fromDate: e.target.value || undefined })} /></label>
+            <input type="date" value={draft.fromDate ?? ""} max={draft.toDate}
+              onChange={(e) => patch({ fromDate: e.target.value || undefined })} /></label>
           <label className="field"><span>{L("إلى تاريخ", "To date")}</span>
-            <input type="date" value={draft.toDate ?? ""} onChange={(e) => patch({ toDate: e.target.value || undefined })} /></label>
+            <input type="date" value={draft.toDate ?? ""} min={draft.fromDate}
+              onChange={(e) => patch({ toDate: e.target.value || undefined })} /></label>
           <label className="field"><span>{L("الحالة", "Status")}</span>
             <select value={draft.status ?? ""} onChange={(e) => patch({ status: (e.target.value || undefined) as CopyState | undefined })}>
               <option value="">{L("الكل", "All")}</option>
