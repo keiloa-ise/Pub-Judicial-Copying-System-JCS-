@@ -110,8 +110,9 @@ A **متفرق** row has `CopyNumber = null`, `MiscNumber` set, and `OriginalCop
 | Id 🔑 | uniqueidentifier | |
 | CopyRequestId 🔗 | uniqueidentifier | → `CopyRequests` (cascade delete) |
 | FormTemplateId 🔗 | uniqueidentifier null | → `FormTemplates` |
-| FieldValuesJson | nvarchar(max) | JSON of fixed-field values (panel, dates, …) |
+| FieldValuesJson | nvarchar(max) | JSON of fixed-field values (panel, dates, …). Panel dissent flags (`members[].dissenting` + `presidentDissenting`) and delegation flags (`members[].delegated` + `presidentDelegated`, capacity «ندباً») live here (FR-19) |
 | SectionsJson | nvarchar(max) | JSON array of inserted paragraph sections |
+| DissentSectionsJson | nvarchar(max) | JSON array of dissent-appendix sections (الرأي المخالف, FR-19); `[]` when no dissent (default backfills existing rows) |
 | Body | nvarchar(max) | legacy body text |
 
 ---

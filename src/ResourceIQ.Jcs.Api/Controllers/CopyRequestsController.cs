@@ -110,7 +110,7 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> SaveDraft(Guid id, SaveDraftRequest body, CancellationToken ct)
     {
         await prepareService.SaveDraftAsync(
-            new SaveDraftCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.Body), ct);
+            new SaveDraftCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.DissentSectionsJson, body.Body), ct);
         return NoContent();
     }
 
@@ -151,7 +151,7 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> Correct(Guid id, SaveDraftRequest body, CancellationToken ct)
     {
         await reviewService.CorrectAsync(
-            new CorrectCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.Body), ct);
+            new CorrectCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.DissentSectionsJson, body.Body), ct);
         return NoContent();
     }
 

@@ -138,6 +138,7 @@ public sealed class CopyContentConfiguration : IEntityTypeConfiguration<CopyCont
         b.HasKey(x => x.Id);
         b.Property(x => x.FieldValuesJson).IsRequired();
         b.Property(x => x.SectionsJson).IsRequired();        // nvarchar(max) — JSON array of sections
+        b.Property(x => x.DissentSectionsJson).IsRequired().HasDefaultValue("[]"); // dissent appendix; default backfills existing rows
         b.Property(x => x.Body);                              // nvarchar(max) — legacy body
         b.HasOne(x => x.FormTemplate).WithMany().HasForeignKey(x => x.FormTemplateId);
     }

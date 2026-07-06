@@ -174,6 +174,10 @@ requests, completes form fields, adds legal paragraphs, and saves drafts.
 - **Arabic spell-check:** free-text content fields (section titles and bodies, and text form
   fields) have Arabic spell-checking enabled to assist the Copyist. Legal text is never silently
   altered — suggestions are advisory only.
+- **رقم القرار (auto):** the decision number is **not** typed by the Copyist — it is auto-filled from the
+  copy's own sequential number (رقم النسخة) and shown read-only.
+- **Dissent (مخالفة القضاة):** the Copyist may mark one or more panel judges — including the room
+  president — as **dissenting (مخالف)** and author a dissent appendix stating the reason; see **FR-19**.
 
 ### FR-08 — Dynamic forms
 Administrator can create form templates, define fields, and define validation rules.
@@ -229,6 +233,10 @@ The copy can be printed as the official "إعلام الحكم" document.
 - If the copy is **not approved** (any state other than *Approved*), every page is stamped with a
   clear, repeated **"مسودة قرار"** watermark, so a draft can never be mistaken for a final copy.
   Once approved, the watermark is absent.
+- If any judge **dissents (FR-19)**, the decision page shows — **before the judges' signatures** — a
+  note that a dissenting opinion exists, naming the dissenting judges; and a **dissent appendix** is
+  printed on a **new page** after the decision (reason sections + signatures of the dissenting judges
+  only).
 
 ### FR-16 — Delete a last decision (Registry Head)
 Deletion is performed only through a dedicated **deletion-operations window** (no per-copy delete
@@ -292,6 +300,29 @@ The year is taken from the copy's **reservation date** (`ReservationDate.Year`),
   the previous year's decisions are no longer listed there (a known scoping limit of decision 4).
 **Acceptance:** the first copy of a new reservation year is numbered `…/{year}/0001`; prior-year
 counters are untouched; no manual reset is needed.
+
+### FR-19 — Judges' dissent (مخالفة القضاة)
+A decision may carry a **dissenting opinion (رأي مخالف)**: one or more judges of the panel — **including
+the room president** — disagree with the issued decision, with the reason stated explicitly and signed by
+the dissenting judges.
+**Acceptance:**
+- In the Copyist's preparation screen a **«مخالف» checkbox** appears next to each judge (president and
+  every member); ticking it marks that judge as dissenting.
+- When at least one judge dissents, a **dissent-appendix editor** appears, authored with the **same
+  paragraph/template style** as the main body (the رأي مخالف reason).
+- **Finalize is blocked** (submit for review / approve) if a dissent is marked with no reason text.
+- The printed «إعلام الحكم» then shows **at the bottom of the decision page — before the judges'
+  signatures — a note that a dissent exists, naming the dissenting judges**, and a **dissent appendix on
+  a new page** after the decision: the reason sections followed by the **signatures of the dissenting
+  judges only**.
+- Which judges dissent is stored inside the copy's panel field values (`members[].dissenting` +
+  `presidentDissenting`); the reason text is a separate content column (`DissentSectionsJson`). Both are
+  **backward-compatible** — existing copies carry no dissent.
+- **Delegated judges (ندباً):** any panel judge — a member **or the president** — may be a **delegated
+  judge from another room or court**. A «منتدب» toggle lets the Copyist pick that judge from **all active
+  judges** (not just the copy room's), and the delegated judge's capacity (صفة) is **auto-set to «ندباً»
+  and locked** (non-editable). Stored as `members[].delegated` / `presidentDelegated` in the panel field
+  values; the printed capacity is «ندباً». Backward-compatible — existing copies carry no delegation.
 
 ## 8. Non-functional requirements
 

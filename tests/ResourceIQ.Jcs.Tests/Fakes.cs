@@ -118,6 +118,7 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<IReadOnlyList<RoomDto>> ListRoomsAsync(Guid? courtId, bool activeOnly, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndCourtAsync(Role role, Guid courtId, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListJudgesByRoomAsync(Guid roomId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<IReadOnlyList<LookupItem>> ListActiveJudgesAsync(CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListPanelMemberTitlesAsync(CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<ParagraphTemplateDto>> ListParagraphTemplatesAsync(bool includeArchived, Guid? formTemplateId, bool onlyForTemplate, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<FormTemplateDto>> ListFormTemplatesAsync(bool activeOnly, CancellationToken ct) => throw new NotImplementedException();

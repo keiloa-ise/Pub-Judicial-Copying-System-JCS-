@@ -28,6 +28,15 @@ public class CopyContent
     /// </summary>
     public string SectionsJson { get; set; } = "[]";
 
+    /// <summary>
+    /// Dissent appendix (الرأي المخالف): ordered sections in the same shape as
+    /// <see cref="SectionsJson"/> (JSON array of { "title", "text" }). When one or more judges
+    /// dissent, this holds the reason text; it is printed on a NEW page after the decision and
+    /// signed by the dissenting judges. "[]" when there is no dissent. Which judges dissent is
+    /// stored inside <see cref="FieldValuesJson"/> (members[].dissenting + presidentDissenting).
+    /// </summary>
+    public string DissentSectionsJson { get; set; } = "[]";
+
     /// <summary>Legacy free-text body (superseded by <see cref="SectionsJson"/>). Kept for compatibility.</summary>
     public string Body { get; set; } = string.Empty;
 }

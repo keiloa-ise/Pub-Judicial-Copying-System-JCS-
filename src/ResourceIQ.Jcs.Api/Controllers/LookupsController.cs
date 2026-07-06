@@ -26,6 +26,11 @@ public sealed class LookupsController(LookupService lookups) : ControllerBase
     public async Task<IActionResult> Judges(Guid roomId, CancellationToken ct) =>
         Ok(await lookups.JudgesInRoomAsync(roomId, ct));
 
+    /// <summary>All active judges (any court/room) — for picking a delegated (ندباً) panel member.</summary>
+    [HttpGet("judges")]
+    public async Task<IActionResult> AllJudges(CancellationToken ct) =>
+        Ok(await lookups.AllActiveJudgesAsync(ct));
+
     [HttpGet("panel-titles")]
     public async Task<IActionResult> PanelTitles(CancellationToken ct) =>
         Ok(await lookups.PanelMemberTitlesAsync(ct));

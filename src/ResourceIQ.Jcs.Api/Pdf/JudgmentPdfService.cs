@@ -43,6 +43,7 @@ public sealed class JudgmentPdfService
 
         var members = ParsePanelMembers(G("members"));
         var sections = ParseSections(d.SectionsJson);
+        var dissentSections = ParseSections(d.DissentSectionsJson);
 
         var parts = (d.CopyNumber ?? "").Split('/');
         var courtCode = parts.Length == 3 ? parts[0] : "";
@@ -71,7 +72,7 @@ public sealed class JudgmentPdfService
                 page.Background().Element(bg => Background(bg, draft));
 
                 page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year));
-                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections));
+                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections));
             });
         }).GeneratePdf();
     }
@@ -112,8 +113,10 @@ public sealed class JudgmentPdfService
     }
 
     // ── Body ──
-    private static void Body(IContainer c, CopyRequestDetail d, Func<string, string> G, IReadOnlyList<(string Name, string Title)> members,
-        IReadOnlyList<(string Title, string Text)> sections)
+    private static void Body(IContainer c, CopyRequestDetail d, Func<string, string> G,
+        IReadOnlyList<(string Name, string Title, bool Dissenting)> members,
+        IReadOnlyList<(string Title, string Text)> sections,
+        IReadOnlyList<(string Title, string Text)> dissentSections)
     {
         c.PaddingTop(12).Column(col =>
         {
@@ -142,6 +145,15 @@ public sealed class JudgmentPdfService
                     p.Item().Element(e => PanelRow(e, m.Name, string.IsNullOrWhiteSpace(m.Title) ? "مستشاراً" : m.Title));
             });
 
+            // Dissenting judges (رأي مخالف): the president and/or any member flagged as dissenting.
+            // Computed once — used both for the note on this page (before the signatures) and the
+            // dissent appendix on the following page.
+            var dissenters = new List<(string Name, string Title)>();
+            if (string.Equals(G("presidentDissenting"), "true", StringComparison.OrdinalIgnoreCase))
+                dissenters.Add((G("president"), G("presidentTitle")));
+            foreach (var m in members)
+                if (m.Dissenting) dissenters.Add((m.Name, m.Title));
+
             // Inserted sections, in order. Section text may carry inline bold/italic (rendered as
             // styled runs); the title is plain.
             foreach (var s in sections)
@@ -154,6 +166,16 @@ public sealed class JudgmentPdfService
             // Issue date line.
             col.Item().PaddingTop(20).AlignCenter()
                 .Text($"قراراً صدر في {Dots(G("issueHijri"))} هـ الموافق لـ {Dots(G("issueGregorian"))} م").Bold();
+
+            // A dissent exists → flag it on the decision page itself, BEFORE the signatures, naming
+            // the dissenting judges. The full reasoning is in the الرأي المخالف appendix that follows.
+            if (dissenters.Count > 0)
+                col.Item().PaddingTop(10).Text(t =>
+                {
+                    t.Span("صدر هذا القرار مع وجود رأي مخالف. القضاة المخالفون: ").Bold();
+                    t.Span(string.Join("، ", dissenters.Select(x => Dash(x.Name))));
+                    t.Span(" (انظر ملحق الرأي المخالف).");
+                });
 
             // Signatures — each over the title the copyist chose.
             col.Item().PaddingTop(40).Row(r =>
@@ -170,6 +192,27 @@ public sealed class JudgmentPdfService
                 f.RelativeItem().Text($"نسخ: {d.AssignedCopyistName ?? "—"}").FontSize(9).FontColor(Colors.Grey.Darken2);
                 f.RelativeItem().AlignLeft().Text(d.CopyNumber is { } cn ? $"رقم النسخة: {cn}" : $"رقم المتفرق: {d.MiscNumber}").FontSize(9).FontColor(Colors.Grey.Darken2);
             });
+
+            // ── Dissent appendix (الرأي المخالف) — printed on a NEW page whenever one or more judges
+            // dissent (dissenters computed above). Holds the reason (same paragraph style) and is
+            // signed by the dissenting judges ONLY; the reason text comes from DissentSectionsJson.
+            if (dissenters.Count > 0)
+            {
+                col.Item().PageBreak();
+                col.Item().PaddingBottom(6).AlignCenter().Text("الرأي المخالف").Bold().FontSize(15);
+                foreach (var s in dissentSections)
+                    col.Item().Column(sec =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(s.Title)) sec.Item().Text($"{s.Title}:").Bold();
+                        sec.Item().PaddingTop(4).Text(t => RenderRich(t, s.Text, 1.9f));
+                    });
+                // Signatures of the dissenting judges (each over the title chosen for them).
+                col.Item().PaddingTop(40).Row(r =>
+                {
+                    foreach (var dj in dissenters)
+                        r.RelativeItem().Element(e => Signature(e, string.IsNullOrWhiteSpace(dj.Title) ? "القاضي المخالف" : dj.Title, dj.Name));
+                });
+            }
         });
     }
 
@@ -201,9 +244,13 @@ public sealed class JudgmentPdfService
         {
             col.Spacing(46);
             for (var i = 0; i < 7; i++)
-                col.Item().AlignCenter()
+                col.Item()
+                    .TranslateX(-50)     // تحريك أفقي
+                    .TranslateY(-50)     // تحريك عمودي
+                    .Rotate(-30)         // تدوير 30 درجة
                     .Text("مسودة قرار        مسودة قرار        مسودة قرار")
-                    .FontFamily(Font).FontSize(26).Bold().FontColor(Colors.Red.Lighten3);
+                    .FontFamily(Font).FontSize(26).Bold()
+                    .FontColor("#73FF0000");   // شفافية ~45% عبر قناة ألفا (QuestPDF لا يوفّر .Opacity)
         });
 
     // ── Parsing helpers ──
@@ -223,9 +270,9 @@ public sealed class JudgmentPdfService
 
     // Panel members: new shape is an array of { judge, title } objects; legacy copies stored a
     // plain array of judge-name strings (rendered with the default "مستشاراً" title downstream).
-    private static List<(string Name, string Title)> ParsePanelMembers(string json)
+    private static List<(string Name, string Title, bool Dissenting)> ParsePanelMembers(string json)
     {
-        var list = new List<(string, string)>();
+        var list = new List<(string, string, bool)>();
         if (string.IsNullOrWhiteSpace(json)) return list;
         try
         {
@@ -236,14 +283,15 @@ public sealed class JudgmentPdfService
                     if (e.ValueKind == JsonValueKind.String)
                     {
                         var s = e.GetString();
-                        if (!string.IsNullOrWhiteSpace(s)) list.Add((s!.Trim(), ""));
+                        if (!string.IsNullOrWhiteSpace(s)) list.Add((s!.Trim(), "", false));
                     }
                     else if (e.ValueKind == JsonValueKind.Object)
                     {
                         var name = Str(e, "judge");
                         if (name.Length == 0) name = Str(e, "name");
                         var title = Str(e, "title");
-                        if (name.Length > 0) list.Add((name, title));
+                        var dissenting = e.TryGetProperty("dissenting", out var dv) && dv.ValueKind == JsonValueKind.True;
+                        if (name.Length > 0) list.Add((name, title, dissenting));
                     }
                 }
         }

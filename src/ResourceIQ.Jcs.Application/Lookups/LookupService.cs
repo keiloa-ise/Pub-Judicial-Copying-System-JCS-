@@ -47,6 +47,15 @@ public sealed class LookupService(ICurrentUser currentUser, IJcsQueries queries)
         return await queries.ListJudgesByRoomAsync(roomId, ct);
     }
 
+    /// <summary>All active judges across every court/room — for selecting a delegated (ندباً) panel
+    /// member from another room or court. Any authenticated editor may read the roster (names only);
+    /// no court scope, since delegation is cross-court by definition.</summary>
+    public Task<IReadOnlyList<LookupItem>> AllActiveJudgesAsync(CancellationToken ct)
+    {
+        Guard.RequireAuthenticated(currentUser);
+        return queries.ListActiveJudgesAsync(ct);
+    }
+
     /// <summary>Active panel-member titles (صفات) the copyist picks per panel member while editing.</summary>
     public Task<IReadOnlyList<LookupItem>> PanelMemberTitlesAsync(CancellationToken ct)
     {

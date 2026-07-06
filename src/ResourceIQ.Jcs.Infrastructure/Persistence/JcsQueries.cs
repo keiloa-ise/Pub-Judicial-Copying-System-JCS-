@@ -85,6 +85,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             cr2.Content != null ? cr2.Content.FormTemplateId : null,
             cr2.Content != null ? cr2.Content.FieldValuesJson : "{}",
             cr2.Content != null ? cr2.Content.SectionsJson : "[]",
+            cr2.Content != null ? cr2.Content.DissentSectionsJson : "[]",
             cr2.Content != null ? cr2.Content.Body : "",
             cr2.CreatedUtc, cr2.ApprovedUtc, cr2.AcceptedUtc,
             cr2.OriginalCopyId, row.OriginalCopyNumber, linked);
@@ -248,6 +249,12 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         await db.Judges.AsNoTracking()
             .Where(j => j.IsActive
                         && db.Set<JudgeRoom>().Any(jr => jr.JudgeId == j.Id && jr.RoomId == roomId))
+            .OrderBy(j => j.Name)
+            .Select(j => new LookupItem(j.Id, j.Name)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupItem>> ListActiveJudgesAsync(CancellationToken ct) =>
+        await db.Judges.AsNoTracking()
+            .Where(j => j.IsActive)
             .OrderBy(j => j.Name)
             .Select(j => new LookupItem(j.Id, j.Name)).ToListAsync(ct);
 

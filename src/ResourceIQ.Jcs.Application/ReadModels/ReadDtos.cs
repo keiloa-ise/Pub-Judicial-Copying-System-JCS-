@@ -46,6 +46,7 @@ public sealed record CopyRequestDetail(
     Guid? FormTemplateId,
     string FieldValuesJson,
     string SectionsJson,
+    string DissentSectionsJson,
     string Body,
     DateTimeOffset CreatedUtc,
     DateTimeOffset? ApprovedUtc,
