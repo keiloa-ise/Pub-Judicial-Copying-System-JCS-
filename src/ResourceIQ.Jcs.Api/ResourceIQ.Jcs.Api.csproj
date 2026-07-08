@@ -17,6 +17,7 @@
          (no SkiaSharp NuGet dep); QRCoder renders the QR purely managed (Linux-safe). -->
     <PackageReference Include="QuestPDF" Version="2026.6.0" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
   <!-- Embedded Arabic font (Amiri, classical naskh) so the PDF renders Arabic correctly on

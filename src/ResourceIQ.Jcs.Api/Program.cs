@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using ResourceIQ.Jcs.Api.Auth;
 using ResourceIQ.Jcs.Api.Middleware;
 using ResourceIQ.Jcs.Application;
@@ -75,6 +76,32 @@ builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
         new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme.",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer",
+                },
+            },
+            Array.Empty<string>()
+        },
+    });
+});
 
 // CORS for the Vite dev server (Arabic/RTL SPA).
 const string SpaCors = "spa";
@@ -89,6 +116,9 @@ var app = builder.Build();
 // ProductionBootstrap runs migrations/seed/admin only when JCS_BOOTSTRAP=true.
 if (app.Environment.IsDevelopment())
 {
+    app.UseSwagger();
+    app.UseSwaggerUI();
+
     using var scope = app.Services.CreateScope();
     var sp = scope.ServiceProvider;
     var db = sp.GetRequiredService<ResourceIQ.Jcs.Infrastructure.Persistence.JcsDbContext>();

@@ -12,6 +12,7 @@ import { RichText, plainToHtml } from "../../components/RichText";
  *  The pairing is by key convention so the form template still drives rendering. */
 const GREGORIAN_KEY = "issueGregorian";
 const HIJRI_KEY = "issueHijri";
+const DECISION_NUMBER_KEY = "decisionNumber";
 /** Fixed key under which the president's chosen title (صفة) is stored in the field values. */
 const PRESIDENT_TITLE_KEY = "presidentTitle";
 
@@ -177,7 +178,7 @@ export function PreparePage({ id }: { id: string }) {
         if (cleanMembers.some((m) => !m.title))
           throw new Error(L("يجب اختيار صفة لكل عضو في الهيئة.", "Select a title for every panel member."));
       }
-      const fieldValues = { ...values };
+      const fieldValues: Record<string, string> = { ...values, [DECISION_NUMBER_KEY]: detail!.copyNumber ?? "" };
       if (membersKey) fieldValues[membersKey] = JSON.stringify(cleanMembers);
       const payload = {
         formTemplateId: formTemplateId || null,
@@ -287,8 +288,15 @@ export function PreparePage({ id }: { id: string }) {
                     <span>{fld.label}</span>
                     <input
                       type={fld.type === "date" ? "date" : fld.type === "number" ? "number" : "text"}
-                      value={values[fld.key] ?? ""}
-                      onChange={(e) => setField(fld.key, e.target.value)}
+                      value={fld.key === DECISION_NUMBER_KEY ? (detail.copyNumber ?? "") : (values[fld.key] ?? "")}
+                      onChange={(e) => {
+                        if (fld.key !== DECISION_NUMBER_KEY) setField(fld.key, e.target.value);
+                      }}
+                      readOnly={fld.key === DECISION_NUMBER_KEY}
+                      aria-readonly={fld.key === DECISION_NUMBER_KEY}
+                      title={fld.key === DECISION_NUMBER_KEY
+                        ? L("رقم محجوز مسبقاً من رئيس الديوان ولا يمكن تعديله يدوياً.", "Reserved by the registry head and cannot be edited manually.")
+                        : undefined}
                       lang={fld.type === "text" ? "ar" : undefined}
                       spellCheck={fld.type === "text"}
                     />
