@@ -194,6 +194,10 @@ Reviewer can approve a request, correct its content directly, or return it for c
 content while the copy stays *Under review* (no bounce to the Copyist) and is recorded as an
 audited Edit whose actor is the Reviewer; the Reviewer then approves. Return requires a
 mandatory corrections note and sends the copy back to the assigned Copyist.
+- **Approval priority order (BR-10):** the Reviewer must **approve** decisions in the **same order the
+  Copyist accepts** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier. A copy
+  cannot be approved while a higher-ranked copy is still *Under review* in the reviewer's courts.
+  (Only approval is ordered; direct correction and return are not.)
 
 ### FR-11 — Approval locking
 The system locks approved copies.
@@ -366,7 +370,7 @@ permanent audit log).
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
 | BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
-| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
+| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 
 ## 11. Open decisions summary

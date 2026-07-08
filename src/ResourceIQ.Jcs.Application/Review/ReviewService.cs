@@ -31,6 +31,12 @@ public sealed class ReviewService(
         Guard.RequireRole(currentUser, Role.Reviewer);            // BR-03
         Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
 
+        // FR-10/BR-10: the Reviewer approves in the SAME priority order the Copyist accepts — highest
+        // tier (موقوف > مستعجل > عادي) then oldest-first. Cannot approve this copy while a higher-ranked
+        // copy is still under review in the reviewer's courts.
+        if (await repository.AnyUnderReviewRankedBeforeAsync(currentUser.CourtIds, request.Urgency, request.CreatedUtc, ct))
+            throw new DomainException("يجب اعتماد القرارات حسب الأولوية: الأعلى أولوية ثم الأقدم أولاً.");
+
         request.Approve(currentUser.Id, clock.UtcNow); // UnderReview → Approved (locked)
         audit.Append(request.Id, AuditAction.Approve);
         await unitOfWork.SaveChangesAsync(ct);

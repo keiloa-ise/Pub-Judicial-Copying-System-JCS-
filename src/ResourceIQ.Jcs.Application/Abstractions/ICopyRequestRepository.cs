@@ -28,6 +28,12 @@ public interface ICopyRequestRepository
     Task<bool> AnyUnacceptedRankedBeforeAsync(
         Guid copyistId, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
 
+    /// <summary>FR-10/BR-10: true if any copy still UNDER REVIEW in the given courts ranks BEFORE the
+    /// given one — higher priority tier, or the same tier but **older** (created earlier). The Reviewer
+    /// must approve in the SAME order the Copyist accepts: موقوف > مستعجل > عادي, then oldest-first.</summary>
+    Task<bool> AnyUnderReviewRankedBeforeAsync(
+        IReadOnlyCollection<Guid> courtIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
+
     /// <summary>Removes the copy request (its CopyContent cascades; audit rows are untouched).</summary>
     void Remove(CopyRequest request);
 }

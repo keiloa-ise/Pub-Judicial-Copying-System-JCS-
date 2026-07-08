@@ -89,6 +89,9 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
     public Task<bool> AnyUnacceptedRankedBeforeAsync(Guid copyistId, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => x.AssignedCopyistId == copyistId && x.State == CopyState.InPreparation && x.AcceptedUtc == null
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
+    public Task<bool> AnyUnderReviewRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.State == CopyState.UnderReview
+            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
     public void Remove(CopyRequest request) => _store.Remove(request.Id);
     public bool Contains(Guid id) => _store.ContainsKey(id);
 }
