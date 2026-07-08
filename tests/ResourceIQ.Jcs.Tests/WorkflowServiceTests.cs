@@ -64,6 +64,84 @@ public class WorkflowServiceTests
             CancellationToken.None));
     }
 
+    // ── رقم الأساس uniqueness: per Court + ReservationDate.Year, عادي only (JC-22) ───────────
+    [Fact]
+    public async Task Create_rejected_for_duplicate_case_base_same_court_same_year()
+    {
+        var court = Guid.NewGuid();
+        var room = Guid.NewGuid();
+        SeedNormal(court); // CaseBaseNumber "case-1", ReservationDate 2026-06-01 — same year as _clock (2026)
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        user.Courts.Add(court);
+        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null) };
+        var svc = new CreateCopyRequestService(user, _clock, _repo, new FakeAllocator(), new FakeMiscAllocator(), _audit, queries, _uow);
+
+        await Assert.ThrowsAsync<DomainException>(() => svc.HandleAsync(
+            new CreateCopyRequestCommand(court, room, null, "case-1", CaseCategory.Normal, CaseUrgency.Suspended, null, null, Guid.NewGuid(), null),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Create_allowed_for_duplicate_case_base_same_court_different_year()
+    {
+        var court = Guid.NewGuid();
+        var room = Guid.NewGuid();
+        var existing = CopyRequest.Create(court, Guid.NewGuid(), null, "case-1", new DateOnly(2025, 6, 1),
+            CaseCategory.Normal, CaseUrgency.Normal, null, null, null, Guid.NewGuid(), Now);
+        existing.AssignNumber("1/2025/0001");
+        _repo.Seed(existing); // same court + رقم الأساس, but ReservationDate.Year = 2025 (clock is 2026)
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        user.Courts.Add(court);
+        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null) };
+        var svc = new CreateCopyRequestService(user, _clock, _repo, new FakeAllocator(), new FakeMiscAllocator(), _audit, queries, _uow);
+
+        var req = await svc.HandleAsync(
+            new CreateCopyRequestCommand(court, room, null, "case-1", CaseCategory.Normal, CaseUrgency.Suspended, null, null, Guid.NewGuid(), null),
+            CancellationToken.None);
+
+        Assert.Equal("case-1", req.CaseBaseNumber);
+        Assert.Equal(CopyState.InPreparation, req.State);
+    }
+
+    [Fact]
+    public async Task Create_allowed_for_duplicate_case_base_different_court_same_year()
+    {
+        var courtA = Guid.NewGuid();
+        var courtB = Guid.NewGuid();
+        var room = Guid.NewGuid();
+        SeedNormal(courtA); // "case-1" in courtA, year 2026
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        user.Courts.Add(courtB);
+        var queries = new FakeQueries { Room = new RoomDto(room, courtB, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null) };
+        var svc = new CreateCopyRequestService(user, _clock, _repo, new FakeAllocator(), new FakeMiscAllocator(), _audit, queries, _uow);
+
+        var req = await svc.HandleAsync(
+            new CreateCopyRequestCommand(courtB, room, null, "case-1", CaseCategory.Normal, CaseUrgency.Suspended, null, null, Guid.NewGuid(), null),
+            CancellationToken.None);
+
+        Assert.Equal(courtB, req.CourtId);
+        Assert.Equal(CopyState.InPreparation, req.State);
+    }
+
+    [Fact]
+    public async Task Create_miscellaneous_bypasses_case_base_duplicate_check()
+    {
+        var court = Guid.NewGuid();
+        var original = SeedApproved(court); // Normal, Approved, CaseBaseNumber "case-1", year 2026
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        user.Courts.Add(court);
+        var svc = new CreateCopyRequestService(user, _clock, _repo, new FakeAllocator(), new FakeMiscAllocator(), _audit, new FakeQueries(), _uow);
+
+        var req = await svc.HandleAsync(
+            new CreateCopyRequestCommand(court, Guid.NewGuid(), null, "case-1", CaseCategory.Miscellaneous, CaseUrgency.Normal, null, "REF-1", Guid.NewGuid(), original.Id),
+            CancellationToken.None);
+
+        Assert.Equal(CaseCategory.Miscellaneous, req.Category);
+        Assert.Equal("case-1", req.CaseBaseNumber);
+        Assert.Null(req.CopyNumber);
+        Assert.NotNull(req.MiscNumber);
+    }
+
     // ── Approve (FR-10/11) ──────────────────────────────────────────────────
     [Fact]
     public async Task Reviewer_can_approve_and_audit_is_written()

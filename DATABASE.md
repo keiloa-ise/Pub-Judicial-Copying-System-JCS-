@@ -82,8 +82,9 @@ null = global). Only non-archived paragraphs are insertable.
 | CourtId 🔗📇 | uniqueidentifier | → `Courts` (cascade) |
 | RoomId 🔗 | uniqueidentifier | → `Rooms` (NoAction — avoids multiple cascade paths) |
 | CaseFilingDate | date null | قيد الدعوى (optional) |
-| CaseBaseNumber | nvarchar(100) | رقم الأساس (required). ⭐ filtered unique `(CourtId, CaseBaseNumber) WHERE [Category]=1` — unique per court for **عادي** only (BR-12) |
+| CaseBaseNumber | nvarchar(100) | رقم الأساس (required). ⭐ filtered unique `(CourtId, CaseBaseNumber, ReservationYear) WHERE [Category]=1` — unique per court **per ReservationDate.Year** for **عادي** only (BR-12, JC-22) |
 | ReservationDate | date | تاريخ الحجز — **server-assigned at creation** (not editable); its year drives both numbering sequences |
+| ReservationYear | int (computed, persisted) | `DATEPART(year, ReservationDate)` — not settable; exists only so SQL Server can index the year (BR-12/JC-22) |
 | Category | int | التصنيف: 1 عادي · 3 متفرق |
 | Urgency | int | الحالة: 1 موقوف · 2 مستعجل · 3 عادي |
 | ExpediteRequestNumber | nvarchar(100) null | رقم طلب الاستعجال — required when Urgency = مستعجل |

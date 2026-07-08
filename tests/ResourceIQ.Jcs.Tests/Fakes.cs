@@ -84,8 +84,9 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
     public Task AddAsync(CopyRequest request, CancellationToken ct) { _store[request.Id] = request; return Task.CompletedTask; }
     public Task<bool> AnyLinkedMiscAsync(Guid originalCopyId, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => x.OriginalCopyId == originalCopyId));
-    public Task<bool> NormalCaseBaseExistsAsync(Guid courtId, string caseBaseNumber, CancellationToken ct) =>
-        Task.FromResult(_store.Values.Any(x => x.CourtId == courtId && x.Category == CaseCategory.Normal && x.CaseBaseNumber == caseBaseNumber));
+    public Task<bool> NormalCaseBaseExistsAsync(Guid courtId, string caseBaseNumber, int reservationYear, CancellationToken ct) =>
+        Task.FromResult(_store.Values.Any(x => x.CourtId == courtId && x.Category == CaseCategory.Normal
+            && x.CaseBaseNumber == caseBaseNumber && x.ReservationDate.Year == reservationYear));
     public Task<bool> AnyUnacceptedRankedBeforeAsync(Guid copyistId, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => x.AssignedCopyistId == copyistId && x.State == CopyState.InPreparation && x.AcceptedUtc == null
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));

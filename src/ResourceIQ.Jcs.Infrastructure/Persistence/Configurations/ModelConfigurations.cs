@@ -114,9 +114,15 @@ public sealed class CopyRequestConfiguration : IEntityTypeConfiguration<CopyRequ
         // BR-11: lookup of متفرق copies linked to an original copy (and the delete guard).
         b.HasIndex(x => x.OriginalCopyId);
 
-        // رقم الأساس is unique PER COURT for عادي copies only. متفرق copies inherit the original's
-        // رقم الأساس, so they are excluded via a filtered index ([Category] = 1 is Normal).
-        b.HasIndex(x => new { x.CourtId, x.CaseBaseNumber }).IsUnique().HasFilter("[Category] = 1");
+        // JC-22: رقم الأساس is unique PER COURT PER YEAR (تاريخ الحجز) for عادي copies only.
+        // متفرق copies inherit the original's رقم الأساس, so they are excluded via a filtered
+        // index ([Category] = 1 is Normal). ReservationYear is a computed persisted column (SQL
+        // Server can't index a computed expression directly) since ReservationDate.Year is never
+        // stored on the entity itself.
+        b.Property<int>("ReservationYear").HasComputedColumnSql("DATEPART(year, [ReservationDate])", stored: true);
+        b.HasIndex("CourtId", "CaseBaseNumber", "ReservationYear")
+            .IsUnique().HasFilter("[Category] = 1")
+            .HasDatabaseName("IX_CopyRequests_CourtId_CaseBaseNumber_ReservationYear");
 
         b.HasOne(x => x.Content).WithOne(c => c.CopyRequest!)
             .HasForeignKey<CopyContent>(c => c.CopyRequestId);

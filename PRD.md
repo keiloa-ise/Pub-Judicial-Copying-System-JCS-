@@ -139,8 +139,10 @@ Registry Head can select court and room, choose the assigned copyist, enter the 
 number, and optionally the **case-filing date (قيد الدعوى)**, plus the classifications below.
 **تاريخ الحجز (reservation date) is NOT entered** — it is **assigned by the server** at creation
 (the current date) and is not editable; it also drives the numbering year (FR-18).
-**رقم الأساس** must be **unique per court for عادي copies** (no two عادي copies in a court may share
-the same رقم الأساس; متفرق copies inherit the original's and are excluded — BR-12).
+**رقم الأساس** must be **unique per court, per تاريخ الحجز year, for عادي copies** (no two عادي
+copies in the same court and the same reservation year may share the same رقم الأساس; the same
+رقم الأساس may be reused in a different year; متفرق copies inherit the original's and are excluded
+— BR-12, JC-22).
 - **التصنيف (Category):** عادي (default) / متفرق. A **متفرق** decision is **based on an existing
   Approved عادي copy** (النسخة الأصلية, BR-11): the Registry Head selects that original; the متفرق
   **does NOT get a رقم النسخة** — only a **رقم المتفرق** allocated by the **room's numbering policy**
@@ -334,7 +336,7 @@ permanent audit log).
 | BR-09 | A Registry Head may delete (via the deletion window) within their courts (FR-16; any state, incl. Approved): a **عادي** copy only if it is the court+year latest AND has **no linked متفرق** (else it would orphan them); or a **متفرق** only if it is the last in its numbering scope. Copy + content removed; audit retained + `delete` entry appended; the relevant counter (رقم النسخة for عادي, رقم المتفرق for متفرق) is rolled back — no gap. |
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
-| BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
+| BR-12 | رقم الأساس is **unique per court, per تاريخ الحجز year, for عادي copies** (متفرق inherit the original's and are excluded; the same رقم الأساس may recur in a different year — JC-22). تاريخ الحجز is **server-assigned** at creation (not editable). |
 | BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 

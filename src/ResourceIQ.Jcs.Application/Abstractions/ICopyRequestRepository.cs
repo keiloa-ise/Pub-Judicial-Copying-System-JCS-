@@ -19,8 +19,9 @@ public interface ICopyRequestRepository
     /// <summary>BR-11: true if any متفرق copy is linked to this (original) copy — blocks its deletion.</summary>
     Task<bool> AnyLinkedMiscAsync(Guid originalCopyId, CancellationToken ct);
 
-    /// <summary>رقم الأساس uniqueness: true if a عادي copy with this base already exists in the court.</summary>
-    Task<bool> NormalCaseBaseExistsAsync(Guid courtId, string caseBaseNumber, CancellationToken ct);
+    /// <summary>JC-22: رقم الأساس uniqueness: true if a عادي copy with this base already exists in the
+    /// court for the given تاريخ الحجز year.</summary>
+    Task<bool> NormalCaseBaseExistsAsync(Guid courtId, string caseBaseNumber, int reservationYear, CancellationToken ct);
 
     /// <summary>FR-07: true if the copyist has an unaccepted In-preparation copy that ranks BEFORE the
     /// given one — higher priority tier, or the same tier but **older** (created earlier). Acceptance

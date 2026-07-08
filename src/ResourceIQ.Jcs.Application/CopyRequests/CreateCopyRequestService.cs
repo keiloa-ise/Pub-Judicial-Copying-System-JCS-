@@ -38,6 +38,10 @@ public sealed class CreateCopyRequestService(
     {
         Guard.RequireRole(currentUser, Role.RegistryHead);   // BR-01
 
+        // تاريخ الحجز is server-assigned as "today" (see below, inside the transaction) — its year
+        // is captured here too since JC-22 scopes رقم الأساس uniqueness by (Court, CaseBaseNumber, year).
+        var reservationYear = clock.UtcNow.Year;
+
         // Resolve court/room/case-base. A متفرق (BR-11) is based on an Approved عادي copy and
         // INHERITS its court, room and رقم الأساس; it never carries its own رقم النسخة.
         Guid courtId = cmd.CourtId, roomId = cmd.RoomId;
@@ -64,9 +68,9 @@ public sealed class CreateCopyRequestService(
                        ?? throw new NotFoundException("Room not found.");
             if (room.CourtId != cmd.CourtId || !room.IsActive)
                 throw new DomainException("The selected room is not a valid active room of this court.");
-            // رقم الأساس is unique per court for عادي copies (متفرق inherit the original's base).
-            if (await repository.NormalCaseBaseExistsAsync(cmd.CourtId, cmd.CaseBaseNumber, ct))
-                throw new DomainException("رقم الأساس مستخدم مسبقاً لقرار عادي في هذه المحكمة.");
+            // JC-22: رقم الأساس is unique per court PER YEAR for عادي copies (متفرق inherit the original's base).
+            if (await repository.NormalCaseBaseExistsAsync(cmd.CourtId, cmd.CaseBaseNumber, reservationYear, ct))
+                throw new DomainException("رقم الأساس مستخدم مسبقاً لقرار عادي في هذه المحكمة لهذا العام.");
         }
 
         return await unitOfWork.ExecuteInTransactionAsync(async token =>

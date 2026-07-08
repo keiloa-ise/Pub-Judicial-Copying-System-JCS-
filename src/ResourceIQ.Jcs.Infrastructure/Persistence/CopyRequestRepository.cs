@@ -18,9 +18,10 @@ public sealed class CopyRequestRepository(JcsDbContext db) : ICopyRequestReposit
     public Task<bool> AnyLinkedMiscAsync(Guid originalCopyId, CancellationToken ct) =>
         db.CopyRequests.AnyAsync(x => x.OriginalCopyId == originalCopyId, ct);
 
-    public Task<bool> NormalCaseBaseExistsAsync(Guid courtId, string caseBaseNumber, CancellationToken ct) =>
+    public Task<bool> NormalCaseBaseExistsAsync(Guid courtId, string caseBaseNumber, int reservationYear, CancellationToken ct) =>
         db.CopyRequests.AnyAsync(x => x.CourtId == courtId
-            && x.Category == Domain.Enums.CaseCategory.Normal && x.CaseBaseNumber == caseBaseNumber, ct);
+            && x.Category == Domain.Enums.CaseCategory.Normal && x.CaseBaseNumber == caseBaseNumber
+            && x.ReservationDate.Year == reservationYear, ct);
 
     public Task<bool> AnyUnacceptedRankedBeforeAsync(
         Guid copyistId, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
