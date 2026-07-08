@@ -8,11 +8,15 @@ This document defines the branch naming convention for this project. The goal is
 <type>/<ticket-id>-<short-description>
 ```
 
+
+
 Example:
 
 ```text
 feature/jcs-123-readonly-decision-number
 ```
+
+
 
 If there is no ticket ID, use a short meaningful description:
 
