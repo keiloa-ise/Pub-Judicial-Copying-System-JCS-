@@ -110,7 +110,8 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         var nq = from cr in db.CopyRequests.AsNoTracking()
                  join c in db.Courts on cr.CourtId equals c.Id
                  join rm in db.Rooms on cr.RoomId equals rm.Id
-                 where cr.ReservationDate.Year == year && cr.Category == CaseCategory.Normal && cr.CopyNumber != null
+                 where cr.ReservationDate.Year == year && cr.Category == CaseCategory.Normal
+                       && cr.CopyNumber != null && cr.AcceptedUtc == null
                  select new { cr.Id, CopyNumber = cr.CopyNumber!, cr.CourtId, CourtName = c.Name, RoomName = rm.Name, cr.State, cr.CreatedUtc };
         if (ids is not null) nq = nq.Where(x => ids.Contains(x.CourtId));
         var nrows = await nq.ToListAsync(ct);
@@ -132,7 +133,8 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
                  join rm in db.Rooms on cr.RoomId equals rm.Id
                  join occ in db.CopyRequests on cr.OriginalCopyId equals occ.Id into ocj
                  from orig in ocj.DefaultIfEmpty()
-                 where cr.ReservationDate.Year == year && cr.Category == CaseCategory.Miscellaneous && cr.MiscNumber != null
+                 where cr.ReservationDate.Year == year && cr.Category == CaseCategory.Miscellaneous
+                       && cr.MiscNumber != null && cr.AcceptedUtc == null
                  select new
                  {
                      cr.Id, Misc = cr.MiscNumber!.Value, cr.CourtId, CourtName = c.Name, cr.RoomId, RoomName = rm.Name,

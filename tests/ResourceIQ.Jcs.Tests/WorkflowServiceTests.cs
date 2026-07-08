@@ -231,6 +231,24 @@ public class WorkflowServiceTests
     }
 
     [Fact]
+    public async Task Cannot_delete_after_copyist_accepts_decision()
+    {
+        var court = Guid.NewGuid();
+        var req = SeedNormal(court);
+        var copyist = Guid.NewGuid();
+        req.AssignToCopyist(copyist, Now);
+        req.AcceptByCopyist(copyist, Now);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = MakeDelete(head, copyLast: 5);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.DeleteAsync(new DeleteCopyRequestCommand(req.Id), CancellationToken.None));
+        Assert.True(_repo.Contains(req.Id));
+        Assert.DoesNotContain(AuditAction.Delete, _audit.Actions);
+    }
+
+    [Fact]
     public async Task Non_registry_head_cannot_delete() // FR-16
     {
         var court = Guid.NewGuid();

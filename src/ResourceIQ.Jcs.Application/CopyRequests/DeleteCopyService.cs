@@ -34,6 +34,8 @@ public sealed class DeleteCopyService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06 — within the head's courts
+        if (request.AcceptedUtc is not null)
+            throw new DomainException("لا يمكن الحذف: تم قبول هذا القرار من الناسخ.");
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {

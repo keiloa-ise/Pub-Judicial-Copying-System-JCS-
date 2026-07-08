@@ -8,8 +8,8 @@ type Target =
 
 /**
  * FR-16: the Registry Head's deletion window — two sections (BR-09 / BR-11):
- *  • عادي: the latest copy per court (disabled when it has linked متفرق decisions).
- *  • متفرق: the last متفرق per numbering scope.
+ *  • عادي: the latest unaccepted copy per court (disabled when it has linked متفرق decisions).
+ *  • متفرق: the last unaccepted متفرق per numbering scope.
  * Deleting rolls back the relevant counter so the next copy reuses the number (no gap); audit is kept.
  */
 export function DeletionOperationsPage() {
@@ -43,8 +43,8 @@ export function DeletionOperationsPage() {
     <>
       <h1 className="page-title">{L("عمليات الحذف", "Deletion operations")}</h1>
       <p className="page-sub">
-        {L("احذف آخر قرار عادي في كل محكمة، أو آخر قرار متفرق في كل مستوى ترقيم، ضمن محاكمك. يُعاد الترقيم دون فجوة، ويبقى سجل التدقيق محفوظاً.",
-           "Delete the latest عادي copy per court, or the last متفرق per numbering scope, within your courts. Numbering is rolled back (no gap); the audit trail is kept.")}
+        {L("احذف القرارات غير المقبولة فقط: آخر قرار عادي في كل محكمة، أو آخر قرار متفرق في كل مستوى ترقيم، ضمن محاكمك. يُعاد الترقيم دون فجوة، ويبقى سجل التدقيق محفوظاً.",
+           "Delete only unaccepted decisions: the latest عادي copy per court, or the last متفرق per numbering scope, within your courts. Numbering is rolled back (no gap); the audit trail is kept.")}
       </p>
 
       {err && <ErrorBox message={err} />}
