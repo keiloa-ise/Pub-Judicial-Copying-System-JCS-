@@ -22,7 +22,8 @@ export function NumberingStartsPage() {
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [cCourt, setCCourt] = useState(""); const [cYear, setCYear] = useState(THIS_YEAR); const [cLast, setCLast] = useState(0);
+  const [cCourt, setCCourt] = useState(""); const [cRoom, setCRoom] = useState(""); // cRoom "" = court-wide scope
+  const [cYear, setCYear] = useState(THIS_YEAR); const [cLast, setCLast] = useState(0);
   const [mCourt, setMCourt] = useState(""); const [mScope, setMScope] = useState<NumberingPolicy>("Court");
   const [mRoom, setMRoom] = useState(""); const [mLevel, setMLevel] = useState("A");
   const [mYear, setMYear] = useState(THIS_YEAR); const [mLast, setMLast] = useState(0);
@@ -43,13 +44,15 @@ export function NumberingStartsPage() {
     catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   }
-  function saveCopy(e: FormEvent) { e.preventDefault(); if (!cCourt) return; run(() => api.admin.setCopyCounter(cCourt, cYear, cLast)); }
+  function saveCopy(e: FormEvent) { e.preventDefault(); if (!cCourt) return; run(() => api.admin.setCopyCounter(cCourt, cRoom || null, cYear, cLast)); }
   function saveMisc(e: FormEvent) {
     e.preventDefault(); if (!mCourt) return;
     run(() => api.admin.setMiscCounter(mCourt, mScope, mScope === "Room" ? mRoom : null, mScope === "Special" ? mLevel : null, mYear, mLast));
   }
 
   const mCourtRooms = rooms.filter((r) => r.courtId === mCourt);
+  // Copy scope: court-wide (all court-level rooms) or a specific room-level room.
+  const cCourtRoomLevel = rooms.filter((r) => r.courtId === cCourt && r.copyNumberingPolicy === "Room");
 
   return (
     <>
@@ -62,12 +65,17 @@ export function NumberingStartsPage() {
       {ok && <div className="okbox">{ok}</div>}
 
       <div className="card">
-        <h3>{L("رقم النسخة (لكل محكمة وسنة)", "Copy number (per court & year)")}</h3>
+        <h3>{L("رقم النسخة (حسب النطاق والسنة)", "Copy number (per scope & year)")}</h3>
         <form className="row" onSubmit={saveCopy} style={{ alignItems: "flex-end" }}>
           <label className="field"><span>{L("المحكمة", "Court")}</span>
-            <select value={cCourt} onChange={(e) => setCCourt(e.target.value)} required>
+            <select value={cCourt} onChange={(e) => { setCCourt(e.target.value); setCRoom(""); }} required>
               <option value="" disabled>{L("اختر", "Select")}</option>
               {courts.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+            </select></label>
+          <label className="field"><span>{L("النطاق", "Scope")}</span>
+            <select value={cRoom} onChange={(e) => setCRoom(e.target.value)} disabled={!cCourt}>
+              <option value="">{L("مستوى المحكمة", "Court level")}</option>
+              {cCourtRoomLevel.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}
             </select></label>
           <label className="field" style={{ maxWidth: 120 }}><span>{L("السنة", "Year")}</span>
             <input type="number" value={cYear} onChange={(e) => setCYear(+e.target.value)} required /></label>
@@ -77,8 +85,8 @@ export function NumberingStartsPage() {
         </form>
         {!copyC ? <Spinner /> : copyC.length > 0 && (
           <table className="table">
-            <thead><tr><th>{L("المحكمة", "Court")}</th><th>{L("السنة", "Year")}</th><th>{L("آخر رقم", "Last no.")}</th></tr></thead>
-            <tbody>{copyC.map((x) => <tr key={x.courtId + x.year}><td>{x.courtName} ({x.courtCode})</td><td>{x.year}</td><td>{x.lastNumber}</td></tr>)}</tbody>
+            <thead><tr><th>{L("المحكمة", "Court")}</th><th>{L("النطاق", "Scope")}</th><th>{L("السنة", "Year")}</th><th>{L("آخر رقم", "Last no.")}</th></tr></thead>
+            <tbody>{copyC.map((x) => <tr key={x.courtId + (x.roomId ?? "court") + x.year}><td>{x.courtName} ({x.courtCode})</td><td>{x.scopeLabel}</td><td>{x.year}</td><td>{x.lastNumber}</td></tr>)}</tbody>
           </table>
         )}
       </div>

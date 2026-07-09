@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.OpenApi;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ResourceIQ.Jcs.Api.Auth;
@@ -76,6 +77,27 @@ builder.Services.AddControllers()
         new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 
+// Swagger / OpenAPI (interactive endpoint explorer). Served under /api/docs so it reaches through
+// the SPA's Nginx/Vite "/api" proxy unchanged. Use the "Authorize" button with a JWT from
+// POST /api/auth/login to call secured endpoints.
+builder.Services.AddSwaggerGen(o =>
+{
+    o.SwaggerDoc("v1", new OpenApiInfo { Title = "JCS API", Version = "v1" });
+    o.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste the token returned by POST /api/auth/login (without the 'Bearer ' prefix).",
+    });
+    o.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", doc)] = new List<string>(),
+    });
+});
+
 // CORS for the Vite dev server (Arabic/RTL SPA).
 const string SpaCors = "spa";
 builder.Services.AddCors(o => o.AddPolicy(SpaCors, p => p
@@ -99,6 +121,15 @@ else
 {
     await ResourceIQ.Jcs.Api.Bootstrap.ProductionBootstrap.RunAsync(app);
 }
+
+// Swagger UI at /api/docs (JSON at /api/docs/v1/swagger.json) — anonymous, proxy-friendly.
+app.UseSwagger(o => o.RouteTemplate = "api/docs/{documentName}/swagger.json");
+app.UseSwaggerUI(o =>
+{
+    o.SwaggerEndpoint("/api/docs/v1/swagger.json", "JCS API v1");
+    o.RoutePrefix = "api/docs";
+    o.DocumentTitle = "JCS API — Swagger";
+});
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors(SpaCors);

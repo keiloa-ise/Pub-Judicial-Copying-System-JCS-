@@ -2,7 +2,9 @@
  * Typed API client. Auth is JWT bearer; the token is obtained from
  * /api/auth/login. Authorization is always enforced server-side — this client never assumes it.
  */
-const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:5253";
+// Empty base => relative /api/... calls on the SPA's own origin, forwarded by the Vite dev proxy
+// (dev) or Nginx (prod). Set VITE_API_BASE only to point the SPA at a different-origin API.
+const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 let token: string | null = null;
 export function setToken(t: string | null) { token = t; }
@@ -43,7 +45,7 @@ export interface CopyRequestListItem {
 export interface LinkedMisc { id: string; miscNumber: number | null; referenceNumber: string | null; state: CopyState; reservationDate: string; }
 export interface CopyRequestDetail extends CopyRequestListItem {
   referenceNumber: string | null;
-  formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; body: string; approvedUtc: string | null;
+  formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string; approvedUtc: string | null;
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
 }
 // CopyRequestDetail inherits acceptedUtc from CopyRequestListItem.
@@ -57,12 +59,15 @@ export interface AuditEntry {
 }
 export interface Court { id: string; code: string; name: string; isActive: boolean; }
 export type NumberingPolicy = "Court" | "Room" | "Special";
+/** رقم النسخة (عادي) numbering scope for a room (FR-03). Default Room. */
+export type CopyNumberingPolicy = "Court" | "Room";
 export interface Room {
   id: string; courtId: string; code: string; name: string; isActive: boolean;
   numberingPolicy: NumberingPolicy; numberingLevel: string | null;
+  copyNumberingPolicy: CopyNumberingPolicy;
 }
 /** FR-17: numbering start-point counters (admin go-live setup). */
-export interface CopyNumberCounter { courtId: string; courtCode: string; courtName: string; year: number; lastNumber: number; }
+export interface CopyNumberCounter { courtId: string; courtCode: string; courtName: string; roomId: string | null; scopeLabel: string; year: number; lastNumber: number; }
 export interface MiscNumberCounter { scopeKey: string; courtId: string; courtName: string; scopeLabel: string; year: number; lastNumber: number; }
 
 /** FR-16: the latest عادي copy per court — deletable only when it has no linked متفرق. */
@@ -84,7 +89,7 @@ export interface Judge { id: string; name: string; isActive: boolean; roomIds: s
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
 /** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim). */
-export interface PanelMember { judge: string; title: string; }
+export interface PanelMember { judge: string; title: string; dissenting?: boolean; delegated?: boolean; }
 export interface ParagraphTemplate { id: string; title: string; body: string; isArchived: boolean; formTemplateId: string | null; }
 export interface FormField { id: string; key: string; label: string; type: string; validationRulesJson: string | null; order: number; }
 export interface FormTemplate { id: string; name: string; isActive: boolean; fields: FormField[]; }
@@ -168,11 +173,11 @@ export const api = {
   // FR-16: deletion window — latest عادي per court + last متفرق per scope; delete by copy id.
   deletionTargets: () => request<DeletionTargets>("/api/copy-requests/deletion-targets"),
   deleteRequest: (id: string) => request<void>(`/api/copy-requests/${id}`, { method: "DELETE" }),
-  saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; body: string }) =>
+  saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/content`, { method: "PUT", body: JSON.stringify(body) }),
   submit: (id: string) => request<void>(`/api/copy-requests/${id}/submit`, { method: "POST" }),
   // FR-10: Reviewer corrects the copy in place (same body shape as saveDraft); stays under review.
-  correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; body: string }) =>
+  correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/correct`, { method: "PUT", body: JSON.stringify(body) }),
   approve: (id: string) => request<void>(`/api/copy-requests/${id}/approve`, { method: "POST" }),
   returnForCorrection: (id: string, corrections: string) =>
@@ -185,6 +190,8 @@ export const api = {
   lookupCopyists: (courtId: string) => request<Lookup[]>(`/api/lookups/courts/${courtId}/copyists`),
   lookupRooms: (courtId: string) => request<Room[]>(`/api/lookups/courts/${courtId}/rooms`),
   lookupJudges: (roomId: string) => request<Lookup[]>(`/api/lookups/rooms/${roomId}/judges`),
+  /** FR-19-adjacent: all active judges (any court/room) — for a delegated (ندباً) panel member. */
+  lookupAllJudges: () => request<Lookup[]>("/api/lookups/judges"),
   lookupPanelTitles: () => request<Lookup[]>("/api/lookups/panel-titles"),
   lookupParagraphs: (formTemplateId?: string) =>
     request<ParagraphTemplate[]>(`/api/lookups/paragraph-templates${formTemplateId ? `?formTemplateId=${formTemplateId}` : ""}`),
@@ -216,15 +223,15 @@ export const api = {
 
     listRooms: (courtId?: string) =>
       request<Room[]>(`/api/admin/rooms${courtId ? `?courtId=${courtId}` : ""}`),
-    createRoom: (courtId: string, code: string, name: string, numberingPolicy: NumberingPolicy, numberingLevel: string | null) =>
-      request<{ id: string }>("/api/admin/rooms", { method: "POST", body: JSON.stringify({ courtId, code, name, numberingPolicy, numberingLevel }) }),
-    updateRoom: (id: string, name: string, isActive: boolean, numberingPolicy: NumberingPolicy, numberingLevel: string | null) =>
-      request<void>(`/api/admin/rooms/${id}`, { method: "PUT", body: JSON.stringify({ name, isActive, numberingPolicy, numberingLevel }) }),
+    createRoom: (courtId: string, code: string, name: string, numberingPolicy: NumberingPolicy, numberingLevel: string | null, copyNumberingPolicy: CopyNumberingPolicy) =>
+      request<{ id: string }>("/api/admin/rooms", { method: "POST", body: JSON.stringify({ courtId, code, name, numberingPolicy, numberingLevel, copyNumberingPolicy }) }),
+    updateRoom: (id: string, name: string, isActive: boolean, numberingPolicy: NumberingPolicy, numberingLevel: string | null, copyNumberingPolicy: CopyNumberingPolicy) =>
+      request<void>(`/api/admin/rooms/${id}`, { method: "PUT", body: JSON.stringify({ name, isActive, numberingPolicy, numberingLevel, copyNumberingPolicy }) }),
 
     // FR-17: numbering start points.
     listCopyCounters: () => request<CopyNumberCounter[]>("/api/admin/numbering/copy-counters"),
-    setCopyCounter: (courtId: string, year: number, lastNumber: number) =>
-      request<void>("/api/admin/numbering/copy-counters", { method: "PUT", body: JSON.stringify({ courtId, year, lastNumber }) }),
+    setCopyCounter: (courtId: string, roomId: string | null, year: number, lastNumber: number) =>
+      request<void>("/api/admin/numbering/copy-counters", { method: "PUT", body: JSON.stringify({ courtId, roomId, year, lastNumber }) }),
     listMiscCounters: () => request<MiscNumberCounter[]>("/api/admin/numbering/misc-counters"),
     setMiscCounter: (courtId: string, scope: NumberingPolicy, roomId: string | null, level: string | null, year: number, lastNumber: number) =>
       request<void>("/api/admin/numbering/misc-counters", { method: "PUT", body: JSON.stringify({ courtId, scope, roomId, level, year, lastNumber }) }),

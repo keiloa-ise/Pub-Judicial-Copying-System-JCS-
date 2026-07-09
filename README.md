@@ -63,3 +63,7 @@ Registry-Head ↔ court scoping mechanism (#4). Confirm with stakeholders before
 - Passwords are hashed (PBKDF2); plaintext is never stored or logged.
 - Audit history is append-only — no update/delete path exists in code.
 - Set a real `Jwt:SigningKey` and connection string via secrets/environment; never commit them.
+
+
+## swagger log in
+- url:port/api/docs/

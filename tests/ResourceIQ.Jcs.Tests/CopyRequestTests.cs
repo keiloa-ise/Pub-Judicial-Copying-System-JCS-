@@ -34,7 +34,7 @@ public class CopyRequestTests
     public void Approved_copy_rejects_content_edits() // BR-04
     {
         var r = Approved();
-        Assert.Throws<DomainException>(() => r.UpdateContent(null, "{}", "[]", "new text", Now));
+        Assert.Throws<DomainException>(() => r.UpdateContent(null, "{}", "[]", "[]", "new text", Now));
         Assert.Throws<DomainException>(() => r.EnsureEditable());
     }
 
@@ -54,7 +54,7 @@ public class CopyRequestTests
         Assert.Equal(CopyState.Unlocked, r.State);
 
         // Assigned copyist may edit an unlocked copy...
-        r.UpdateContent(null, "{}", "[{\"title\":\"t\",\"text\":\"fix\"}]", "", Now);
+        r.UpdateContent(null, "{}", "[{\"title\":\"t\",\"text\":\"fix\"}]", "[]", "", Now);
         // ...and re-submit it to the reviewer (Unlocked → UnderReview).
         r.SubmitForReview(Now);
         Assert.Equal(CopyState.UnderReview, r.State);
@@ -79,7 +79,7 @@ public class CopyRequestTests
     public void Reviewer_corrects_in_place_and_stays_under_review() // FR-10 / BR-08
     {
         var r = UnderReview();
-        r.CorrectByReviewer(null, "{}", "[{\"title\":\"t\",\"text\":\"reviewer fix\"}]", "", Now);
+        r.CorrectByReviewer(null, "{}", "[{\"title\":\"t\",\"text\":\"reviewer fix\"}]", "[]", "", Now);
         Assert.Equal(CopyState.UnderReview, r.State); // no state change
         Assert.Contains("reviewer fix", r.Content!.SectionsJson);
 
@@ -105,7 +105,7 @@ public class CopyRequestTests
             if (state == CopyState.InPreparation) r.AssignToCopyist(Guid.NewGuid(), Now);
         }
         Assert.Equal(state, r.State);
-        Assert.Throws<DomainException>(() => r.CorrectByReviewer(null, "{}", "[]", "x", Now));
+        Assert.Throws<DomainException>(() => r.CorrectByReviewer(null, "{}", "[]", "[]", "x", Now));
     }
 
     [Fact]
@@ -166,12 +166,12 @@ public class CopyRequestTests
         var copyist = Guid.NewGuid();
         r.AssignToCopyist(copyist, Now);
         r.AcceptByCopyist(copyist, Now); // FR-07: accept before editing
-        r.UpdateContent(null, "{}", "[{\"title\":\"t\",\"text\":\"draft\"}]", "draft body", Now); // ok in preparation
+        r.UpdateContent(null, "{}", "[{\"title\":\"t\",\"text\":\"draft\"}]", "[]", "draft body", Now); // ok in preparation
         Assert.Equal("draft body", r.Content!.Body);
         Assert.Contains("draft", r.Content!.SectionsJson);
 
         r.SubmitForReview(Now); // → UnderReview
-        Assert.Throws<DomainException>(() => r.UpdateContent(null, "{}", "[]", "x", Now));
+        Assert.Throws<DomainException>(() => r.UpdateContent(null, "{}", "[]", "[]", "x", Now));
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public class CopyRequestTests
         var r = CopyRequest.Create(Guid.NewGuid(), Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Normal, null, null, null, Guid.NewGuid(), Now);
         r.AssignNumber("1/2026/0001");
         r.AssignToCopyist(Guid.NewGuid(), Now); // assigned but NOT accepted
-        Assert.Throws<DomainException>(() => r.UpdateContent(null, "{}", "[]", "x", Now));
+        Assert.Throws<DomainException>(() => r.UpdateContent(null, "{}", "[]", "[]", "x", Now));
         Assert.Throws<DomainException>(() => r.SubmitForReview(Now));
     }
 

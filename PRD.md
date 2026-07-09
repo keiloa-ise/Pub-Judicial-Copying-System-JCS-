@@ -110,7 +110,18 @@ Administrator can create, edit, and disable users, and assign roles.
 
 ### FR-03 — Court & room management
 Administrator can create, edit, activate, and deactivate courts, and manage the rooms (غرف)
-within each court. For each room the Administrator sets the **رقم المتفرق numbering policy**:
+within each court.
+
+**رقم النسخة (عادي) numbering policy — per room:** when creating (or editing, before any number has
+been issued) a room, the Administrator chooses the copy-numbering scope:
+- **مستوى الغرفة (Room level, default):** each room has its own sequential رقم النسخة; the number embeds
+  the room code — `{courtCode}/{roomCode}/{year}/{seq}` — so rooms never collide.
+- **مستوى المحكمة (Court level):** all court-level rooms of the court share one sequence —
+  `{courtCode}/{year}/{seq}`.
+Both reset yearly. The policy **cannot be changed once the room has issued any رقم النسخة** (it would
+mix scopes). Existing rooms were migrated to **room level**. Start points (FR-17) can be seeded at go-live.
+
+For each room the Administrator also sets the **رقم المتفرق numbering policy**:
 - **مستوى المحكمة (Court level):** متفرق copies of the room share one sequence with all of the
   court's court-level rooms.
 - **مستوى الغرفة (Room level):** the room has its own sequence.
@@ -174,6 +185,10 @@ requests, completes form fields, adds legal paragraphs, and saves drafts.
 - **Arabic spell-check:** free-text content fields (section titles and bodies, and text form
   fields) have Arabic spell-checking enabled to assist the Copyist. Legal text is never silently
   altered — suggestions are advisory only.
+- **رقم القرار (auto):** the decision number is **not** typed by the Copyist — it is auto-filled from the
+  copy's own sequential number (رقم النسخة) and shown read-only.
+- **Dissent (مخالفة القضاة):** the Copyist may mark one or more panel judges — including the room
+  president — as **dissenting (مخالف)** and author a dissent appendix stating the reason; see **FR-19**.
 
 ### FR-08 — Dynamic forms
 Administrator can create form templates, define fields, and define validation rules.
@@ -190,6 +205,10 @@ Reviewer can approve a request, correct its content directly, or return it for c
 content while the copy stays *Under review* (no bounce to the Copyist) and is recorded as an
 audited Edit whose actor is the Reviewer; the Reviewer then approves. Return requires a
 mandatory corrections note and sends the copy back to the assigned Copyist.
+- **Approval priority order (BR-10):** the Reviewer must **approve** decisions in the **same order the
+  Copyist accepts** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier. A copy
+  cannot be approved while a higher-ranked copy is still *Under review* in the reviewer's courts.
+  (Only approval is ordered; direct correction and return are not.)
 
 ### FR-11 — Approval locking
 The system locks approved copies.
@@ -229,6 +248,10 @@ The copy can be printed as the official "إعلام الحكم" document.
 - If the copy is **not approved** (any state other than *Approved*), every page is stamped with a
   clear, repeated **"مسودة قرار"** watermark, so a draft can never be mistaken for a final copy.
   Once approved, the watermark is absent.
+- If any judge **dissents (FR-19)**, the decision page shows — **before the judges' signatures** — a
+  note that a dissenting opinion exists, naming the dissenting judges; and a **dissent appendix** is
+  printed on a **new page** after the decision (reason sections + signatures of the dissenting judges
+  only).
 
 ### FR-16 — Delete a last decision (Registry Head)
 Deletion is performed only through a dedicated **deletion-operations window** (no per-copy delete
@@ -293,6 +316,29 @@ The year is taken from the copy's **reservation date** (`ReservationDate.Year`),
 **Acceptance:** the first copy of a new reservation year is numbered `…/{year}/0001`; prior-year
 counters are untouched; no manual reset is needed.
 
+### FR-19 — Judges' dissent (مخالفة القضاة)
+A decision may carry a **dissenting opinion (رأي مخالف)**: one or more judges of the panel — **including
+the room president** — disagree with the issued decision, with the reason stated explicitly and signed by
+the dissenting judges.
+**Acceptance:**
+- In the Copyist's preparation screen a **«مخالف» checkbox** appears next to each judge (president and
+  every member); ticking it marks that judge as dissenting.
+- When at least one judge dissents, a **dissent-appendix editor** appears, authored with the **same
+  paragraph/template style** as the main body (the رأي مخالف reason).
+- **Finalize is blocked** (submit for review / approve) if a dissent is marked with no reason text.
+- The printed «إعلام الحكم» then shows **at the bottom of the decision page — before the judges'
+  signatures — a note that a dissent exists, naming the dissenting judges**, and a **dissent appendix on
+  a new page** after the decision: the reason sections followed by the **signatures of the dissenting
+  judges only**.
+- Which judges dissent is stored inside the copy's panel field values (`members[].dissenting` +
+  `presidentDissenting`); the reason text is a separate content column (`DissentSectionsJson`). Both are
+  **backward-compatible** — existing copies carry no dissent.
+- **Delegated judges (ندباً):** any panel judge — a member **or the president** — may be a **delegated
+  judge from another room or court**. A «منتدب» toggle lets the Copyist pick that judge from **all active
+  judges** (not just the copy room's), and the delegated judge's capacity (صفة) is **auto-set to «ندباً»
+  and locked** (non-editable). Stored as `members[].delegated` / `presidentDelegated` in the panel field
+  values; the printed capacity is «ندباً». Backward-compatible — existing copies carry no delegation.
+
 ## 8. Non-functional requirements
 
 ### Security
@@ -335,7 +381,7 @@ permanent audit log).
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
 | BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
-| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
+| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 
 ## 11. Open decisions summary

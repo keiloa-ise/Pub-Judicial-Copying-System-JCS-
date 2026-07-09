@@ -7,7 +7,7 @@ using ResourceIQ.Jcs.Domain.Enums;
 namespace ResourceIQ.Jcs.Application.CopyRequests;
 
 public sealed record SaveDraftCommand(
-    Guid CopyRequestId, Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string Body);
+    Guid CopyRequestId, Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string Body);
 
 /// <summary>
 /// FR-07: the assigned copyist edits content and saves drafts (any number of times). Edits
@@ -34,8 +34,9 @@ public sealed class PrepareCopyService(
         // Section text may carry inline bold/italic — reduce it to the safe formatting subset
         // (client input is never trusted) before persisting the legally-significant content.
         var sectionsJson = RichText.SanitizeSectionsJson(cmd.SectionsJson);
+        var dissentSectionsJson = RichText.SanitizeSectionsJson(cmd.DissentSectionsJson);
         // EnsureEditable → BR-04. The dynamic body is now an ordered list of inserted sections.
-        request.UpdateContent(cmd.FormTemplateId, cmd.FieldValuesJson, sectionsJson, cmd.Body, clock.UtcNow);
+        request.UpdateContent(cmd.FormTemplateId, cmd.FieldValuesJson, sectionsJson, dissentSectionsJson, cmd.Body, clock.UtcNow);
 
         audit.Append(request.Id, AuditAction.Edit, beforeJson: before, afterJson: sectionsJson);
         await unitOfWork.SaveChangesAsync(ct);

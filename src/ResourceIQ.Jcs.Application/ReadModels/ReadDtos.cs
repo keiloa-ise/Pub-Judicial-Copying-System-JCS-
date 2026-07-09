@@ -46,6 +46,7 @@ public sealed record CopyRequestDetail(
     Guid? FormTemplateId,
     string FieldValuesJson,
     string SectionsJson,
+    string DissentSectionsJson,
     string Body,
     DateTimeOffset CreatedUtc,
     DateTimeOffset? ApprovedUtc,
@@ -104,10 +105,10 @@ public sealed record LookupItem(Guid Id, string Name);
 public sealed record CourtDto(Guid Id, string Code, string Name, bool IsActive);
 
 public sealed record RoomDto(Guid Id, Guid CourtId, string Code, string Name, bool IsActive,
-    NumberingPolicy NumberingPolicy, string? NumberingLevel);
+    NumberingPolicy NumberingPolicy, string? NumberingLevel, CopyNumberingPolicy CopyNumberingPolicy);
 
 /// <summary>FR-17: a رقم النسخة start-point counter — last number issued for a court in a year.</summary>
-public sealed record CopyNumberCounterDto(Guid CourtId, string CourtCode, string CourtName, int Year, int LastNumber);
+public sealed record CopyNumberCounterDto(Guid CourtId, string CourtCode, string CourtName, Guid? RoomId, string ScopeLabel, int Year, int LastNumber);
 
 /// <summary>FR-17: a رقم المتفرق start-point counter — last number issued for a numbering scope in a year.</summary>
 public sealed record MiscNumberCounterDto(string ScopeKey, Guid CourtId, string CourtName, string ScopeLabel, int Year, int LastNumber);

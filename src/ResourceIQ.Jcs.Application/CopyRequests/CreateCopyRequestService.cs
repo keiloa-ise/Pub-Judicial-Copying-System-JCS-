@@ -87,8 +87,9 @@ public sealed class CreateCopyRequestService(
             }
             else
             {
-                // عادي: allocate the sequential رقم النسخة inside the transaction (BR-07).
-                var number = await allocator.AllocateAsync(courtId, reservationDate, token);
+                // عادي: allocate the sequential رقم النسخة inside the transaction (BR-07). Scope
+                // (court-wide or per-room) follows the room's CopyNumberingPolicy (FR-03).
+                var number = await allocator.AllocateAsync(courtId, roomId, reservationDate, token);
                 request.AssignNumber(number);
             }
 

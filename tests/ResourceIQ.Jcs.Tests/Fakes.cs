@@ -27,13 +27,13 @@ internal sealed class FakeAllocator(string number = "00000001") : ICopyNumberAll
     public int Calls { get; private set; }
     public int Releases { get; private set; }
     public int? Last { get; set; } // value PeekLastAsync returns (for delete guards)
-    public Task<string> AllocateAsync(Guid courtId, DateOnly reservationDate, CancellationToken ct)
+    public Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct)
     {
         Calls++;
         return Task.FromResult(number);
     }
-    public Task ReleaseAsync(Guid courtId, int year, CancellationToken ct) { Releases++; return Task.CompletedTask; }
-    public Task<int?> PeekLastAsync(Guid courtId, int year, CancellationToken ct) => Task.FromResult(Last);
+    public Task ReleaseAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) { Releases++; return Task.CompletedTask; }
+    public Task<int?> PeekLastAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) => Task.FromResult(Last);
 }
 
 internal sealed class FakeMiscAllocator(int number = 1) : IMiscNumberAllocator
@@ -89,6 +89,9 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
     public Task<bool> AnyUnacceptedRankedBeforeAsync(Guid copyistId, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => x.AssignedCopyistId == copyistId && x.State == CopyState.InPreparation && x.AcceptedUtc == null
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
+    public Task<bool> AnyUnderReviewRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.State == CopyState.UnderReview
+            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
     public void Remove(CopyRequest request) => _store.Remove(request.Id);
     public bool Contains(Guid id) => _store.ContainsKey(id);
 }
@@ -118,6 +121,7 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<IReadOnlyList<RoomDto>> ListRoomsAsync(Guid? courtId, bool activeOnly, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndCourtAsync(Role role, Guid courtId, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListJudgesByRoomAsync(Guid roomId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<IReadOnlyList<LookupItem>> ListActiveJudgesAsync(CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListPanelMemberTitlesAsync(CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<ParagraphTemplateDto>> ListParagraphTemplatesAsync(bool includeArchived, Guid? formTemplateId, bool onlyForTemplate, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<FormTemplateDto>> ListFormTemplatesAsync(bool activeOnly, CancellationToken ct) => throw new NotImplementedException();

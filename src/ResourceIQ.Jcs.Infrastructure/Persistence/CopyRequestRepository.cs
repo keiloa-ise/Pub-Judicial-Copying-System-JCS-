@@ -29,6 +29,13 @@ public sealed class CopyRequestRepository(JcsDbContext db) : ICopyRequestReposit
             // higher tier (lower enum value = higher priority), OR same tier but created earlier (oldest-first).
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)), ct);
 
+    public Task<bool> AnyUnderReviewRankedBeforeAsync(
+        IReadOnlyCollection<Guid> courtIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        db.CopyRequests.AnyAsync(x => courtIds.Contains(x.CourtId)
+            && x.State == Domain.Enums.CopyState.UnderReview
+            // same ranking as copyist acceptance: higher tier, or same tier but created earlier.
+            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)), ct);
+
     // FR-16: the only delete path. CopyContent cascades; AuditEntries have no FK/cascade → kept.
     public void Remove(CopyRequest request) => db.CopyRequests.Remove(request);
 }

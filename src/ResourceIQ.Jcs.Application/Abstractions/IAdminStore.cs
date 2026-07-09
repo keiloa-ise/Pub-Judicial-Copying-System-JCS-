@@ -19,12 +19,12 @@ public interface IAdminStore
     // Rooms (غرف) — a court is a set of rooms; code is unique within the court.
     Task<bool> CourtExistsAsync(Guid courtId, CancellationToken ct);
     Task<bool> RoomCodeExistsInCourtAsync(Guid courtId, string code, CancellationToken ct);
-    Task<Guid> CreateRoomAsync(Guid courtId, string code, string name, NumberingPolicy policy, string? level, CancellationToken ct);
-    Task UpdateRoomAsync(Guid id, string name, bool isActive, NumberingPolicy policy, string? level, CancellationToken ct);
+    Task<Guid> CreateRoomAsync(Guid courtId, string code, string name, NumberingPolicy policy, string? level, CopyNumberingPolicy copyPolicy, CancellationToken ct);
+    Task UpdateRoomAsync(Guid id, string name, bool isActive, NumberingPolicy policy, string? level, CopyNumberingPolicy copyPolicy, CancellationToken ct);
 
     // Numbering start points (FR-17) — set "last issued number" so auto numbering continues at +1.
     // Guards against lowering below the highest number already used in the system for that scope.
-    Task SetCopyNumberStartAsync(Guid courtId, int year, int lastNumber, CancellationToken ct);
+    Task SetCopyNumberStartAsync(Guid courtId, Guid scopeRoomId, int year, int lastNumber, CancellationToken ct);
     Task SetMiscNumberStartAsync(Guid courtId, string scopeKey, int year, int lastNumber, CancellationToken ct);
 
     // Users (FR-02)

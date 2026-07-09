@@ -63,6 +63,11 @@ stateDiagram-v2
 - **Direct correction (7C, BR-08):** the Reviewer edits the content in place while it stays
   `Under review` (no state change), then approves. The edit is audited as `edit` with the Reviewer
   as actor. This is the only content-write exception to BR-02.
+- **Judges' dissent (FR-19):** during preparation/correction the Copyist (or the correcting Reviewer)
+  may mark one or more panel judges — including the room president — as **dissenting (مخالف)** and author
+  a **dissent appendix**. This is **content, not a state change**; submit/approve is blocked if a dissent
+  has no reason text. The printed copy flags the dissent (with names) before the signatures and prints the
+  appendix on a new page.
 - **Return for correction (7B):** returns to `In preparation` for the assigned Copyist. **[OPEN]**
   whether review/return (and unlock/re-review) cycles are capped — decision #2.
 - **Delete (decision #5, RESOLVED):** via the deletion window (FR-16, BR-09/BR-11), a Registry Head may

@@ -37,12 +37,12 @@ public sealed class AdminController(AdminService admin) : ControllerBase
 
     [HttpPost("rooms")]
     public async Task<IActionResult> CreateRoom(CreateRoomRequest b, CancellationToken ct) =>
-        Ok(new { id = await admin.CreateRoomAsync(b.CourtId, b.Code, b.Name, b.NumberingPolicy, b.NumberingLevel, ct) });
+        Ok(new { id = await admin.CreateRoomAsync(b.CourtId, b.Code, b.Name, b.NumberingPolicy, b.NumberingLevel, b.CopyNumberingPolicy, ct) });
 
     [HttpPut("rooms/{id:guid}")]
     public async Task<IActionResult> UpdateRoom(Guid id, UpdateRoomRequest b, CancellationToken ct)
     {
-        await admin.UpdateRoomAsync(id, b.Name, b.IsActive, b.NumberingPolicy, b.NumberingLevel, ct);
+        await admin.UpdateRoomAsync(id, b.Name, b.IsActive, b.NumberingPolicy, b.NumberingLevel, b.CopyNumberingPolicy, ct);
         return NoContent();
     }
 
@@ -52,7 +52,7 @@ public sealed class AdminController(AdminService admin) : ControllerBase
 
     [HttpPut("numbering/copy-counters")]
     public async Task<IActionResult> SetCopyCounter(SetCopyNumberStartRequest b, CancellationToken ct)
-    { await admin.SetCopyNumberStartAsync(b.CourtId, b.Year, b.LastNumber, ct); return NoContent(); }
+    { await admin.SetCopyNumberStartAsync(b.CourtId, b.RoomId, b.Year, b.LastNumber, ct); return NoContent(); }
 
     [HttpGet("numbering/misc-counters")]
     public async Task<IActionResult> MiscCounters(CancellationToken ct) => Ok(await admin.ListMiscNumberCountersAsync(ct));

@@ -25,7 +25,33 @@ export function NumberingLevelsPage() {
 
   return (
     <>
-      <h1 className="page-title">{L("مستويات ترقيم المتفرق", "Misc numbering levels")}</h1>
+      {/* ── Decision (رقم النسخة) numbering levels (FR-03) — shown BEFORE the متفرق levels ── */}
+      <h1 className="page-title">{L("مستويات ترقيم القرارات", "Decision numbering levels")}</h1>
+      <p className="page-sub">
+        {L("لكل محكمة: الغرف التي تُرقّم قراراتها على مستوى الغرفة (تسلسل مستقل لكل غرفة)، والغرف على مستوى المحكمة (تسلسل واحد مشترك). الحالة الافتراضية: مستوى الغرفة.",
+           "Per court: rooms numbering decisions at room level (each room its own sequence) vs court level (one shared sequence). Default: room level.")}
+      </p>
+
+      {courts.map((c) => {
+        const courtRooms = rooms.filter((r) => r.courtId === c.id);
+        if (courtRooms.length === 0) return null;
+        const copyRoom = courtRooms.filter((r) => r.copyNumberingPolicy === "Room");
+        const copyCourt = courtRooms.filter((r) => r.copyNumberingPolicy === "Court");
+        return (
+          <div className="card" key={`copy-${c.id}`}>
+            <h3>{c.name} ({c.code})</h3>
+            <dl className="kv">
+              <dt>{numberingPolicyLabels.Room[ak]}</dt>
+              <dd>{copyRoom.length ? copyRoom.map((r) => r.name).join("، ") : "—"}</dd>
+              <dt>{numberingPolicyLabels.Court[ak]}</dt>
+              <dd>{copyCourt.length ? L(`${copyCourt.length} غرفة — تسلسل واحد على مستوى المحكمة`, `${copyCourt.length} rooms — one court-wide sequence`) : "—"}</dd>
+            </dl>
+          </div>
+        );
+      })}
+
+      {/* ── Misc (رقم المتفرق) numbering levels (FR-06) ── */}
+      <h1 className="page-title" style={{ marginTop: 24 }}>{L("مستويات ترقيم المتفرق", "Misc numbering levels")}</h1>
       <p className="page-sub">
         {L("لكل محكمة: المستويات الخاصة (A–Z) والغرف المرتبطة بكل مستوى، إضافةً إلى غرف مستوى المحكمة ومستوى الغرفة. المستويات الخاصة مُعرَّفة داخل كل محكمة على حدة.",
            "Per court: special levels (A–Z) and their rooms, plus court-level and room-level rooms. Special levels are defined within each court.")}

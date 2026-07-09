@@ -60,15 +60,15 @@ public sealed class DeleteCopyService(
                 // عادي — must not orphan any linked متفرق (BR-09)…
                 if (await repository.AnyLinkedMiscAsync(request.Id, token))
                     throw new DomainException("لا يمكن الحذف: توجد قرارات متفرقة مرتبطة بهذه النسخة؛ احذفها أولاً.");
-                // …and must be the court+year latest رقم النسخة.
+                // …and must be the latest رقم النسخة in its numbering scope (court-wide or per-room).
                 var seq = ParseSeq(request.CopyNumber);
-                var lastCopy = await copyNumbers.PeekLastAsync(request.CourtId, year, token);
+                var lastCopy = await copyNumbers.PeekLastAsync(request.CourtId, request.RoomId, year, token);
                 if (seq is null || lastCopy != seq)
-                    throw new DomainException("لا يمكن الحذف: هذا ليس آخر قرار في هذه المحكمة لنفس السنة.");
+                    throw new DomainException("لا يمكن الحذف: هذا ليس آخر قرار في نطاق الترقيم لنفس السنة.");
 
                 AppendDelete();
                 repository.Remove(request);
-                await copyNumbers.ReleaseAsync(request.CourtId, year, token);
+                await copyNumbers.ReleaseAsync(request.CourtId, request.RoomId, year, token);
             }
 
             await unitOfWork.SaveChangesAsync(token);
@@ -78,7 +78,8 @@ public sealed class DeleteCopyService(
 
     private static int? ParseSeq(string? copyNumber)
     {
+        // Sequence is the LAST segment for both formats: {court}/{year}/{seq} and {court}/{room}/{year}/{seq}.
         var parts = (copyNumber ?? "").Split('/');
-        return parts.Length == 3 && int.TryParse(parts[2], out var s) ? s : null;
+        return parts.Length >= 3 && int.TryParse(parts[^1], out var s) ? s : null;
     }
 }

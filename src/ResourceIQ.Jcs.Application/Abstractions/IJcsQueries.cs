@@ -33,6 +33,8 @@ public interface IJcsQueries
     Task<RoomDto?> GetRoomAsync(Guid roomId, CancellationToken ct);
     Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndCourtAsync(Role role, Guid courtId, CancellationToken ct);
     Task<IReadOnlyList<LookupItem>> ListJudgesByRoomAsync(Guid roomId, CancellationToken ct);
+    /// <summary>All active judges (any court/room) — for picking a delegated (ندباً) panel member.</summary>
+    Task<IReadOnlyList<LookupItem>> ListActiveJudgesAsync(CancellationToken ct);
     /// <summary>Active panel-member titles (صفات), in display order, for the copy editor's pickers.</summary>
     Task<IReadOnlyList<LookupItem>> ListPanelMemberTitlesAsync(CancellationToken ct);
     Task<IReadOnlyList<ParagraphTemplateDto>> ListParagraphTemplatesAsync(

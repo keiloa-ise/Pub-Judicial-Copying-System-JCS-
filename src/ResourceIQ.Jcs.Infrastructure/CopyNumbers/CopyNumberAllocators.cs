@@ -2,42 +2,58 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using ResourceIQ.Jcs.Application.Abstractions;
+using ResourceIQ.Jcs.Domain.Enums;
 using ResourceIQ.Jcs.Infrastructure.Persistence;
 
 namespace ResourceIQ.Jcs.Infrastructure.CopyNumbers;
 
 /// <summary>
-/// DEFAULT registration. Refuses to allocate because the copy-number uniqueness scope and
-/// format are undefined (PRD decision #1). This deliberately fails fast rather than silently
-/// committing the system to a scheme. Swap in a concrete allocator once the decision lands.
+/// DEFAULT registration. Refuses to allocate because the copy-number scope/format is undefined.
+/// This deliberately fails fast rather than silently committing the system to a scheme. Swap in a
+/// concrete allocator (e.g. <see cref="PerCourtCopyNumberAllocator"/>) once the decision lands.
 /// </summary>
 public sealed class PendingCopyNumberAllocator : ICopyNumberAllocator
 {
-    public Task<string> AllocateAsync(Guid courtId, DateOnly reservationDate, CancellationToken ct) =>
+    public Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct) =>
         throw new NotSupportedException(
-            "Copy-number scope/format is undefined (PRD decision #1). Register a concrete " +
-            "ICopyNumberAllocator (e.g. GlobalCopyNumberAllocator) once the uniqueness scope " +
-            "is confirmed, and define the matching UNIQUE constraint in CopyRequestConfiguration.");
+            "Copy-number scope/format is undefined. Register a concrete ICopyNumberAllocator " +
+            "(e.g. PerCourtCopyNumberAllocator).");
 
-    public Task ReleaseAsync(Guid courtId, int year, CancellationToken ct) =>
-        throw new NotSupportedException("Copy-number scope is undefined (PRD decision #1).");
+    public Task ReleaseAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) =>
+        throw new NotSupportedException("Copy-number scope is undefined.");
 
-    public Task<int?> PeekLastAsync(Guid courtId, int year, CancellationToken ct) =>
-        throw new NotSupportedException("Copy-number scope is undefined (PRD decision #1).");
+    public Task<int?> PeekLastAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) =>
+        throw new NotSupportedException("Copy-number scope is undefined.");
 }
 
 /// <summary>
-/// PER-COURT allocator (PRD decision #1, confirmed): each court has its own sequential copy
-/// number. Atomically increments the court's row in <c>CourtCopyCounters</c> inside the ambient
-/// create-request transaction (BR-07), so numbers never collide and reset per court. Pairs with
-/// the composite UNIQUE (CourtId, CopyNumber) index.
+/// رقم النسخة allocator (FR-03, PRD decision #1). The scope is chosen per **room**:
+///   • <c>CopyNumberingPolicy.Court</c> — all rooms in the court share one sequence; number is
+///     <c>{courtCode}/{year}/{seq}</c>. The counter row uses <c>RoomId = Guid.Empty</c>.
+///   • <c>CopyNumberingPolicy.Room</c> (default) — each room has its own sequence; number is
+///     <c>{courtCode}/{roomCode}/{year}/{seq}</c> (the room code keeps numbers distinct within the
+///     court, so the composite UNIQUE (CourtId, CopyNumber) index is unchanged).
+/// Atomically upserts the scope's row in <c>CourtCopyCounters</c> inside the ambient create-request
+/// transaction (BR-07), so numbers never collide and reset per scope per year.
 /// </summary>
 public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAllocator
 {
-    public async Task<string> AllocateAsync(Guid courtId, DateOnly reservationDate, CancellationToken ct)
+    // Resolve the numbering scope (which counter row) + the codes used to format the number.
+    private async Task<(Guid ScopeRoomId, string CourtCode, string? RoomCode)> ResolveScopeAsync(
+        Guid roomId, CancellationToken ct)
+    {
+        var room = await db.Rooms.Where(r => r.Id == roomId)
+            .Select(r => new { r.CopyNumberingPolicy, r.Code, CourtCode = r.Court!.Code })
+            .FirstAsync(ct);
+        return room.CopyNumberingPolicy == CopyNumberingPolicy.Room
+            ? (roomId, room.CourtCode, room.Code)     // per-room sequence; room code in the number
+            : (Guid.Empty, room.CourtCode, null);     // court-wide sequence; no room code
+    }
+
+    public async Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct)
     {
         var year = reservationDate.Year; // the case's year drives the sequence + the printed number
-        var code = await db.Courts.Where(c => c.Id == courtId).Select(c => c.Code).FirstAsync(ct);
+        var (scopeRoomId, courtCode, roomCode) = await ResolveScopeAsync(roomId, ct);
 
         var conn = db.Database.GetDbConnection();
         var mustClose = conn.State != ConnectionState.Open;
@@ -46,27 +62,23 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
         {
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-            // Per-court-per-year upsert + read, one round-trip. Safe under the create flow's
-            // Serializable transaction (concurrent creates for the same court+year serialize).
+            // Per-scope-per-year upsert + read, one round-trip. Safe under the create flow's
+            // Serializable transaction (concurrent creates for the same scope+year serialize).
             cmd.CommandText = """
                 SET NOCOUNT ON;
-                UPDATE CourtCopyCounters SET LastNumber = LastNumber + 1 WHERE CourtId = @c AND Year = @y;
-                IF @@ROWCOUNT = 0 INSERT INTO CourtCopyCounters (CourtId, Year, LastNumber) VALUES (@c, @y, 1);
-                SELECT LastNumber FROM CourtCopyCounters WHERE CourtId = @c AND Year = @y;
+                UPDATE CourtCopyCounters SET LastNumber = LastNumber + 1 WHERE CourtId = @c AND RoomId = @r AND Year = @y;
+                IF @@ROWCOUNT = 0 INSERT INTO CourtCopyCounters (CourtId, RoomId, Year, LastNumber) VALUES (@c, @r, @y, 1);
+                SELECT LastNumber FROM CourtCopyCounters WHERE CourtId = @c AND RoomId = @r AND Year = @y;
                 """;
-            void AddParam(string name, object value)
-            {
-                var p = cmd.CreateParameter();
-                p.ParameterName = name;
-                p.Value = value;
-                cmd.Parameters.Add(p);
-            }
-            AddParam("@c", courtId);
-            AddParam("@y", year);
+            AddParam(cmd, "@c", courtId);
+            AddParam(cmd, "@r", scopeRoomId);
+            AddParam(cmd, "@y", year);
 
             var seq = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
-            // Copy number embeds the court code and year, e.g. C-001/2026/0001
-            return $"{code}/{year}/{seq:D4}";
+            // Court-level: {courtCode}/{year}/{seq}. Room-level: {courtCode}/{roomCode}/{year}/{seq}.
+            return roomCode is null
+                ? $"{courtCode}/{year}/{seq:D4}"
+                : $"{courtCode}/{roomCode}/{year}/{seq:D4}";
         }
         finally
         {
@@ -74,9 +86,10 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
         }
     }
 
-    public async Task ReleaseAsync(Guid courtId, int year, CancellationToken ct)
+    public async Task ReleaseAsync(Guid courtId, Guid roomId, int year, CancellationToken ct)
     {
-        // FR-16: undo the last allocation for this court+year so the next create reuses the number.
+        // FR-16: undo the last allocation for this scope+year so the next create reuses the number.
+        var (scopeRoomId, _, _) = await ResolveScopeAsync(roomId, ct);
         var conn = db.Database.GetDbConnection();
         var mustClose = conn.State != ConnectionState.Open;
         if (mustClose) await db.Database.OpenConnectionAsync(ct);
@@ -84,9 +97,10 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
         {
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-            cmd.CommandText = "UPDATE CourtCopyCounters SET LastNumber = LastNumber - 1 WHERE CourtId = @c AND Year = @y AND LastNumber > 0;";
-            var pc = cmd.CreateParameter(); pc.ParameterName = "@c"; pc.Value = courtId; cmd.Parameters.Add(pc);
-            var py = cmd.CreateParameter(); py.ParameterName = "@y"; py.Value = year; cmd.Parameters.Add(py);
+            cmd.CommandText = "UPDATE CourtCopyCounters SET LastNumber = LastNumber - 1 WHERE CourtId = @c AND RoomId = @r AND Year = @y AND LastNumber > 0;";
+            AddParam(cmd, "@c", courtId);
+            AddParam(cmd, "@r", scopeRoomId);
+            AddParam(cmd, "@y", year);
             await cmd.ExecuteNonQueryAsync(ct);
         }
         finally
@@ -95,8 +109,9 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
         }
     }
 
-    public async Task<int?> PeekLastAsync(Guid courtId, int year, CancellationToken ct)
+    public async Task<int?> PeekLastAsync(Guid courtId, Guid roomId, int year, CancellationToken ct)
     {
+        var (scopeRoomId, _, _) = await ResolveScopeAsync(roomId, ct);
         var conn = db.Database.GetDbConnection();
         var mustClose = conn.State != ConnectionState.Open;
         if (mustClose) await db.Database.OpenConnectionAsync(ct);
@@ -104,9 +119,10 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
         {
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-            cmd.CommandText = "SELECT LastNumber FROM CourtCopyCounters WHERE CourtId = @c AND Year = @y;";
-            var pc = cmd.CreateParameter(); pc.ParameterName = "@c"; pc.Value = courtId; cmd.Parameters.Add(pc);
-            var py = cmd.CreateParameter(); py.ParameterName = "@y"; py.Value = year; cmd.Parameters.Add(py);
+            cmd.CommandText = "SELECT LastNumber FROM CourtCopyCounters WHERE CourtId = @c AND RoomId = @r AND Year = @y;";
+            AddParam(cmd, "@c", courtId);
+            AddParam(cmd, "@r", scopeRoomId);
+            AddParam(cmd, "@y", year);
             var scalar = await cmd.ExecuteScalarAsync(ct);
             return scalar is null or DBNull ? null : Convert.ToInt32(scalar);
         }
@@ -115,39 +131,12 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
             if (mustClose) await db.Database.CloseConnectionAsync();
         }
     }
-}
 
-/// <summary>
-/// Alternative GLOBAL-scope allocator (single SQL Server <c>CopyNumberSequence</c>). NOT used —
-/// kept for reference. The system uses <see cref="PerCourtCopyNumberAllocator"/> per decision #1.
-/// </summary>
-public sealed class GlobalCopyNumberAllocator(JcsDbContext db) : ICopyNumberAllocator
-{
-    public async Task<string> AllocateAsync(Guid courtId, DateOnly reservationDate, CancellationToken ct)
+    private static void AddParam(System.Data.Common.DbCommand cmd, string name, object value)
     {
-        // NEXT VALUE FOR cannot live inside a derived table, so we run it as a plain scalar
-        // command (not SqlQueryRaw, which wraps it). It enlists in the ambient transaction so
-        // allocation is atomic with the create (BR-07).
-        var conn = db.Database.GetDbConnection();
-        var mustClose = conn.State != ConnectionState.Open;
-        if (mustClose) await db.Database.OpenConnectionAsync(ct);
-        try
-        {
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = $"SELECT NEXT VALUE FOR {JcsDbContext.CopyNumberSequence}";
-            cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-            var scalar = await cmd.ExecuteScalarAsync(ct);
-            return Convert.ToInt64(scalar).ToString("D8");
-        }
-        finally
-        {
-            if (mustClose) await db.Database.CloseConnectionAsync();
-        }
+        var p = cmd.CreateParameter();
+        p.ParameterName = name;
+        p.Value = value;
+        cmd.Parameters.Add(p);
     }
-
-    public Task ReleaseAsync(Guid courtId, int year, CancellationToken ct) =>
-        throw new NotSupportedException("Global SEQUENCE allocation cannot be rolled back; not used.");
-
-    public Task<int?> PeekLastAsync(Guid courtId, int year, CancellationToken ct) =>
-        throw new NotSupportedException("Global SEQUENCE allocation does not expose a per-court last; not used.");
 }

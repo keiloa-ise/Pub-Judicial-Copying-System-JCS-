@@ -27,7 +27,7 @@ public class WorkflowServiceTests
         var user = new FakeCurrentUser { Role = Role.RegistryHead };
         user.Courts.Add(court);
         var allocator = new FakeAllocator("00000042");
-        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null) };
+        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null, CopyNumberingPolicy.Room) };
         var svc = new CreateCopyRequestService(user, _clock, _repo, allocator, new FakeMiscAllocator(), _audit, queries, _uow);
 
         var req = await svc.HandleAsync(
@@ -78,6 +78,27 @@ public class WorkflowServiceTests
 
         Assert.Equal(CopyState.Approved, req.State);
         Assert.Contains(AuditAction.Approve, _audit.Actions);
+    }
+
+    [Fact]
+    public async Task Reviewer_must_approve_in_priority_order() // FR-10 / BR-10
+    {
+        var court = Guid.NewGuid();
+        // Two copies under review in the same court: موقوف (higher priority) + عادي (lower).
+        var suspended = SeedUnderReviewWith(court, CaseUrgency.Suspended, "case-A", "00000001");
+        var normal = SeedUnderReviewWith(court, CaseUrgency.Normal, "case-B", "00000002");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // Approving the lower-priority عادي while a موقوف is still under review is rejected.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(normal.Id), CancellationToken.None));
+        Assert.Equal(CopyState.UnderReview, normal.State);
+
+        // Approving the higher-priority موقوف first is allowed.
+        await svc.ApproveAsync(new ApproveCommand(suspended.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, suspended.State);
     }
 
     [Fact]
@@ -262,6 +283,19 @@ public class WorkflowServiceTests
         var copyist = Guid.NewGuid();
         r.AssignToCopyist(copyist, Now);
         r.AcceptByCopyist(copyist, Now); // FR-07: must accept before submitting
+        r.SubmitForReview(Now);
+        _repo.Seed(r);
+        return r;
+    }
+
+    // Under-review copy with a chosen urgency/base/number (for the reviewer priority-order test).
+    private CopyRequest SeedUnderReviewWith(Guid court, CaseUrgency urgency, string caseBase, string number)
+    {
+        var r = CopyRequest.Create(court, Guid.NewGuid(), null, caseBase, new DateOnly(2026, 6, 1), CaseCategory.Normal, urgency, null, null, null, Guid.NewGuid(), Now);
+        r.AssignNumber(number);
+        var copyist = Guid.NewGuid();
+        r.AssignToCopyist(copyist, Now);
+        r.AcceptByCopyist(copyist, Now);
         r.SubmitForReview(Now);
         _repo.Seed(r);
         return r;

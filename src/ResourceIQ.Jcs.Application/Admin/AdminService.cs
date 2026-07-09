@@ -49,7 +49,8 @@ public sealed class AdminService(
     { RequireAdmin(); return queries.ListRoomsAsync(courtId, activeOnly: false, ct); }
 
     public async Task<Guid> CreateRoomAsync(
-        Guid courtId, string code, string name, NumberingPolicy policy, string? level, CancellationToken ct)
+        Guid courtId, string code, string name, NumberingPolicy policy, string? level,
+        CopyNumberingPolicy copyPolicy, CancellationToken ct)
     {
         RequireAdmin();
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
@@ -58,14 +59,18 @@ public sealed class AdminService(
             throw new DomainException("Court not found.");
         if (await store.RoomCodeExistsInCourtAsync(courtId, code.Trim(), ct))
             throw new DomainException("Room code already exists in this court.");
-        return await store.CreateRoomAsync(courtId, code.Trim(), name.Trim(), policy, NormalizeLevel(policy, level), ct);
+        return await store.CreateRoomAsync(courtId, code.Trim(), name.Trim(), policy, NormalizeLevel(policy, level), copyPolicy, ct);
     }
 
-    public Task UpdateRoomAsync(Guid id, string name, bool isActive, NumberingPolicy policy, string? level, CancellationToken ct)
+    public Task UpdateRoomAsync(
+        Guid id, string name, bool isActive, NumberingPolicy policy, string? level,
+        CopyNumberingPolicy copyPolicy, CancellationToken ct)
     {
         RequireAdmin();
         if (string.IsNullOrWhiteSpace(name)) throw new DomainException("Room name is required.");
-        return store.UpdateRoomAsync(id, name.Trim(), isActive, policy, NormalizeLevel(policy, level), ct);
+        // FR-03: the رقم النسخة scope may be changed only before the room issued any عادي number
+        // (changing it afterwards would mix scopes). The store enforces this (it has the data).
+        return store.UpdateRoomAsync(id, name.Trim(), isActive, policy, NormalizeLevel(policy, level), copyPolicy, ct);
     }
 
     /// <summary>A Special-policy room needs a level letter A..Z; other policies carry no level.</summary>
@@ -87,12 +92,14 @@ public sealed class AdminService(
     public Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct)
     { RequireAdmin(); return queries.ListMiscNumberCountersAsync(ct); }
 
-    public async Task SetCopyNumberStartAsync(Guid courtId, int year, int lastNumber, CancellationToken ct)
+    public async Task SetCopyNumberStartAsync(Guid courtId, Guid? roomId, int year, int lastNumber, CancellationToken ct)
     {
         RequireAdmin();
         ValidateYearAndNumber(year, lastNumber);
         if (!await store.CourtExistsAsync(courtId, ct)) throw new DomainException("Court not found.");
-        await store.SetCopyNumberStartAsync(courtId, year, lastNumber, ct);
+        // roomId set → that room's own sequence (room-level); null → the court-wide sequence.
+        if (roomId is { } rid && !await store.RoomsExistAsync([rid], ct)) throw new DomainException("Room not found.");
+        await store.SetCopyNumberStartAsync(courtId, roomId ?? Guid.Empty, year, lastNumber, ct);
     }
 
     public async Task SetMiscNumberStartAsync(

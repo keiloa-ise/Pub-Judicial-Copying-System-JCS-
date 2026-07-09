@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ResourceIQ.Jcs.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using ResourceIQ.Jcs.Infrastructure.Persistence;
 namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JcsDbContext))]
-    partial class JcsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260706050935_AddDissentSections")]
+    partial class AddDissentSections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -239,16 +242,13 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CourtId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("RoomId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int>("Year")
                         .HasColumnType("int");
 
                     b.Property<int>("LastNumber")
                         .HasColumnType("int");
 
-                    b.HasKey("CourtId", "RoomId", "Year");
+                    b.HasKey("CourtId", "Year");
 
                     b.ToTable("CourtCopyCounters");
                 });
@@ -426,11 +426,6 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("CopyNumberingPolicy")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(2);
 
                     b.Property<Guid>("CourtId")
                         .HasColumnType("uniqueidentifier");

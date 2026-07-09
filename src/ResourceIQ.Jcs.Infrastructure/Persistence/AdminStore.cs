@@ -42,40 +42,51 @@ public sealed class AdminStore(JcsDbContext db) : IAdminStore
     public Task<bool> RoomCodeExistsInCourtAsync(Guid courtId, string code, CancellationToken ct) =>
         db.Rooms.AnyAsync(r => r.CourtId == courtId && r.Code == code, ct);
 
-    public async Task<Guid> CreateRoomAsync(Guid courtId, string code, string name, NumberingPolicy policy, string? level, CancellationToken ct)
+    public async Task<Guid> CreateRoomAsync(Guid courtId, string code, string name, NumberingPolicy policy, string? level, CopyNumberingPolicy copyPolicy, CancellationToken ct)
     {
         if (await db.Rooms.AnyAsync(r => r.CourtId == courtId && r.Name == name, ct))
             throw new DomainException("اسم الغرفة مستخدم مسبقاً في هذه المحكمة.");
-        var room = new Room { CourtId = courtId, Code = code, Name = name, IsActive = true, NumberingPolicy = policy, NumberingLevel = level };
+        var room = new Room { CourtId = courtId, Code = code, Name = name, IsActive = true, NumberingPolicy = policy, NumberingLevel = level, CopyNumberingPolicy = copyPolicy };
         db.Rooms.Add(room);
         await db.SaveChangesAsync(ct);
         return room.Id;
     }
 
-    public async Task UpdateRoomAsync(Guid id, string name, bool isActive, NumberingPolicy policy, string? level, CancellationToken ct)
+    public async Task UpdateRoomAsync(Guid id, string name, bool isActive, NumberingPolicy policy, string? level, CopyNumberingPolicy copyPolicy, CancellationToken ct)
     {
         var room = await db.Rooms.FindAsync([id], ct) ?? throw new NotFoundException("Room not found.");
         if (await db.Rooms.AnyAsync(r => r.CourtId == room.CourtId && r.Name == name && r.Id != id, ct))
             throw new DomainException("اسم الغرفة مستخدم مسبقاً في هذه المحكمة.");
+        // FR-03: block changing the رقم النسخة scope once the room has issued any عادي number (would mix scopes).
+        if (room.CopyNumberingPolicy != copyPolicy
+            && await db.CopyRequests.AnyAsync(x => x.RoomId == id && x.Category == CaseCategory.Normal && x.CopyNumber != null, ct))
+            throw new DomainException("لا يمكن تغيير سياسة ترقيم النسخة بعد إصدار أرقام لهذه الغرفة.");
         room.Name = name;
         room.IsActive = isActive;
         room.NumberingPolicy = policy;
         room.NumberingLevel = level;
+        room.CopyNumberingPolicy = copyPolicy;
         await db.SaveChangesAsync(ct);
     }
 
     // ── Numbering start points (FR-17) ──
-    public async Task SetCopyNumberStartAsync(Guid courtId, int year, int lastNumber, CancellationToken ct)
+    // scopeRoomId: Guid.Empty = court-wide sequence (court-level rooms share it); a room id = that
+    // room's own sequence (room-level, FR-03). The counter key is (CourtId, scopeRoomId, Year).
+    public async Task SetCopyNumberStartAsync(Guid courtId, Guid scopeRoomId, int year, int lastNumber, CancellationToken ct)
     {
-        var nums = await db.CopyRequests
-            .Where(cr => cr.CourtId == courtId && cr.ReservationDate.Year == year && cr.CopyNumber != null)
-            .Select(cr => cr.CopyNumber!).ToListAsync(ct);
+        // Highest رقم نسخة already used in THIS scope for the year (guards against re-issuing a number).
+        var q = db.CopyRequests.Where(cr => cr.ReservationDate.Year == year && cr.Category == CaseCategory.Normal && cr.CopyNumber != null);
+        q = scopeRoomId == Guid.Empty
+            ? q.Where(cr => cr.CourtId == courtId
+                            && db.Rooms.Any(rm => rm.Id == cr.RoomId && rm.CopyNumberingPolicy == CopyNumberingPolicy.Court))
+            : q.Where(cr => cr.RoomId == scopeRoomId);
+        var nums = await q.Select(cr => cr.CopyNumber!).ToListAsync(ct);
         var maxUsed = nums.Select(ParseSeq).DefaultIfEmpty(0).Max();
         if (lastNumber < maxUsed)
             throw new DomainException($"لا يمكن ضبط البداية ({lastNumber}) أقل من أعلى رقم نسخة مُستخدَم فعلاً ({maxUsed}).");
 
-        var c = await db.CourtCopyCounters.FindAsync([courtId, year], ct);
-        if (c is null) db.CourtCopyCounters.Add(new CourtCopyCounter { CourtId = courtId, Year = year, LastNumber = lastNumber });
+        var c = await db.CourtCopyCounters.FindAsync([courtId, scopeRoomId, year], ct);
+        if (c is null) db.CourtCopyCounters.Add(new CourtCopyCounter { CourtId = courtId, RoomId = scopeRoomId, Year = year, LastNumber = lastNumber });
         else c.LastNumber = lastNumber;
         await db.SaveChangesAsync(ct);
     }
@@ -102,8 +113,9 @@ public sealed class AdminStore(JcsDbContext db) : IAdminStore
 
     private static int ParseSeq(string copyNumber)
     {
+        // Sequence is the LAST segment for both {court}/{year}/{seq} and {court}/{room}/{year}/{seq}.
         var p = copyNumber.Split('/');
-        return p.Length == 3 && int.TryParse(p[2], out var s) ? s : 0;
+        return p.Length >= 3 && int.TryParse(p[^1], out var s) ? s : 0;
     }
 
     // ── Users ──

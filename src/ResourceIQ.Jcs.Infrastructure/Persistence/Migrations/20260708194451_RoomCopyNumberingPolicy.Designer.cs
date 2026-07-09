@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ResourceIQ.Jcs.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using ResourceIQ.Jcs.Infrastructure.Persistence;
 namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JcsDbContext))]
-    partial class JcsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260708194451_RoomCopyNumberingPolicy")]
+    partial class RoomCopyNumberingPolicy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

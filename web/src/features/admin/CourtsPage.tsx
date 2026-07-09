@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Court, type Room, type NumberingPolicy } from "../../api/client";
+import { api, type Court, type Room, type NumberingPolicy, type CopyNumberingPolicy } from "../../api/client";
 import { useL, ErrorBox, Spinner, Modal, useSort, SortTh, numberingPolicyLabels } from "../../app/ui";
 import { useI18n } from "../../i18n";
 
@@ -31,11 +31,13 @@ export function CourtsPage() {
   const [roomName, setRoomName] = useState("");
   const [roomPolicy, setRoomPolicy] = useState<NumberingPolicy>("Court");
   const [roomLevel, setRoomLevel] = useState("A");
+  const [roomCopyPolicy, setRoomCopyPolicy] = useState<CopyNumberingPolicy>("Room"); // رقم النسخة scope (default room)
   const [edRoom, setEdRoom] = useState<Room | null>(null);
   const [edRoomName, setEdRoomName] = useState("");
   const [edRoomActive, setEdRoomActive] = useState(true);
   const [edRoomPolicy, setEdRoomPolicy] = useState<NumberingPolicy>("Court");
   const [edRoomLevel, setEdRoomLevel] = useState("A");
+  const [edRoomCopyPolicy, setEdRoomCopyPolicy] = useState<CopyNumberingPolicy>("Room");
 
   const load = () => api.admin.listCourts().then(setCourts).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
@@ -75,13 +77,14 @@ export function CourtsPage() {
     e.preventDefault();
     if (!roomCourtId) return;
     const level = roomPolicy === "Special" ? roomLevel : null;
-    run(async () => { await api.admin.createRoom(roomCourtId, roomCode, roomName, roomPolicy, level); setRoomCode(""); setRoomName(""); setRoomPolicy("Court"); setRoomLevel("A"); },
+    run(async () => { await api.admin.createRoom(roomCourtId, roomCode, roomName, roomPolicy, level, roomCopyPolicy); setRoomCode(""); setRoomName(""); setRoomPolicy("Court"); setRoomLevel("A"); setRoomCopyPolicy("Room"); },
         () => loadRooms(roomCourtId));
   }
 
   function startEditRoom(r: Room) {
     setErr(null); setEdRoom(r); setEdRoomName(r.name); setEdRoomActive(r.isActive);
     setEdRoomPolicy(r.numberingPolicy); setEdRoomLevel(r.numberingLevel ?? "A");
+    setEdRoomCopyPolicy(r.copyNumberingPolicy);
   }
 
   function saveRoomEdit(e: FormEvent) {
@@ -89,7 +92,7 @@ export function CourtsPage() {
     if (!edRoom) return;
     const r = edRoom;
     const level = edRoomPolicy === "Special" ? edRoomLevel : null;
-    run(async () => { await api.admin.updateRoom(r.id, edRoomName, edRoomActive, edRoomPolicy, level); setEdRoom(null); },
+    run(async () => { await api.admin.updateRoom(r.id, edRoomName, edRoomActive, edRoomPolicy, level, edRoomCopyPolicy); setEdRoom(null); },
         () => loadRooms(roomCourtId));
   }
 
@@ -208,6 +211,13 @@ export function CourtsPage() {
                         <option key={p} value={p}>{numberingPolicyLabels[p][ak]}</option>)}
                     </select>
                   </label>
+                  <label className="field" style={{ maxWidth: 220 }}>
+                    <span>{L("ترقيم النسخة (عادي)", "Copy numbering")}</span>
+                    <select value={edRoomCopyPolicy} onChange={(e) => setEdRoomCopyPolicy(e.target.value as CopyNumberingPolicy)}>
+                      {(["Room", "Court"] as CopyNumberingPolicy[]).map((p) =>
+                        <option key={p} value={p}>{numberingPolicyLabels[p][ak]}</option>)}
+                    </select>
+                  </label>
                   {edRoomPolicy === "Special" && (
                     <label className="field" style={{ maxWidth: 120 }}>
                       <span>{L("المستوى", "Level")}</span>
@@ -240,6 +250,13 @@ export function CourtsPage() {
                     <option key={p} value={p}>{numberingPolicyLabels[p][ak]}</option>)}
                 </select>
               </label>
+              <label className="field" style={{ maxWidth: 200 }}>
+                <span>{L("ترقيم النسخة (عادي)", "Copy numbering")}</span>
+                <select value={roomCopyPolicy} onChange={(e) => setRoomCopyPolicy(e.target.value as CopyNumberingPolicy)}>
+                  {(["Room", "Court"] as CopyNumberingPolicy[]).map((p) =>
+                    <option key={p} value={p}>{numberingPolicyLabels[p][ak]}</option>)}
+                </select>
+              </label>
               {roomPolicy === "Special" && (
                 <label className="field" style={{ maxWidth: 120 }}>
                   <span>{L("المستوى", "Level")}</span>
@@ -259,6 +276,7 @@ export function CourtsPage() {
                   <SortTh label={L("الرمز", "Code")} k="code" sortKey={roomSort.sortKey} sortDir={roomSort.sortDir} onSort={roomSort.onSort} />
                   <SortTh label={L("الاسم", "Name")} k="name" sortKey={roomSort.sortKey} sortDir={roomSort.sortDir} onSort={roomSort.onSort} />
                   <th>{L("ترقيم المتفرق", "Misc numbering")}</th>
+                  <th>{L("ترقيم النسخة", "Copy numbering")}</th>
                   <SortTh label={L("الحالة", "Status")} k="status" sortKey={roomSort.sortKey} sortDir={roomSort.sortDir} onSort={roomSort.onSort} />
                   <th></th>
                 </tr></thead>
@@ -268,11 +286,12 @@ export function CourtsPage() {
                       <td>{r.code}</td>
                       <td>{r.name}</td>
                       <td>{numberingPolicyLabels[r.numberingPolicy][ak]}{r.numberingPolicy === "Special" && r.numberingLevel ? ` (${r.numberingLevel})` : ""}</td>
+                      <td>{numberingPolicyLabels[r.copyNumberingPolicy][ak]}</td>
                       <td>{r.isActive ? <span className="badge s-approved">{L("نشط", "Active")}</span> : <span className="badge s-created">{L("معطّل", "Inactive")}</span>}</td>
                       <td>
                         <div className="btn-row" style={{ margin: 0 }}>
                           <button className="btn btn--ghost" onClick={() => startEditRoom(r)}>{L("تعديل", "Edit")}</button>
-                          <button className="btn btn--ghost" onClick={() => run(() => api.admin.updateRoom(r.id, r.name, !r.isActive, r.numberingPolicy, r.numberingLevel), () => loadRooms(roomCourtId))}>
+                          <button className="btn btn--ghost" onClick={() => run(() => api.admin.updateRoom(r.id, r.name, !r.isActive, r.numberingPolicy, r.numberingLevel, r.copyNumberingPolicy), () => loadRooms(roomCourtId))}>
                             {r.isActive ? L("تعطيل", "Deactivate") : L("تفعيل", "Activate")}
                           </button>
                         </div>

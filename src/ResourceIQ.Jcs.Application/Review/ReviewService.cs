@@ -9,7 +9,7 @@ namespace ResourceIQ.Jcs.Application.Review;
 public sealed record ApproveCommand(Guid CopyRequestId);
 public sealed record ReturnCommand(Guid CopyRequestId, string Corrections);
 public sealed record CorrectCommand(
-    Guid CopyRequestId, Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string Body);
+    Guid CopyRequestId, Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string Body);
 
 /// <summary>
 /// FR-10/FR-11: a Reviewer approves (→ locked, read-only), corrects the content directly
@@ -30,6 +30,12 @@ public sealed class ReviewService(
 
         Guard.RequireRole(currentUser, Role.Reviewer);            // BR-03
         Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+
+        // FR-10/BR-10: the Reviewer approves in the SAME priority order the Copyist accepts — highest
+        // tier (موقوف > مستعجل > عادي) then oldest-first. Cannot approve this copy while a higher-ranked
+        // copy is still under review in the reviewer's courts.
+        if (await repository.AnyUnderReviewRankedBeforeAsync(currentUser.CourtIds, request.Urgency, request.CreatedUtc, ct))
+            throw new DomainException("يجب اعتماد القرارات حسب الأولوية: الأعلى أولوية ثم الأقدم أولاً.");
 
         request.Approve(currentUser.Id, clock.UtcNow); // UnderReview → Approved (locked)
         audit.Append(request.Id, AuditAction.Approve);
@@ -52,8 +58,9 @@ public sealed class ReviewService(
 
         var before = request.Content?.SectionsJson;
         var sectionsJson = RichText.SanitizeSectionsJson(cmd.SectionsJson);
+        var dissentSectionsJson = RichText.SanitizeSectionsJson(cmd.DissentSectionsJson);
         // CorrectByReviewer requires UnderReview; the copy is NOT moved off that state here.
-        request.CorrectByReviewer(cmd.FormTemplateId, cmd.FieldValuesJson, sectionsJson, cmd.Body, clock.UtcNow);
+        request.CorrectByReviewer(cmd.FormTemplateId, cmd.FieldValuesJson, sectionsJson, dissentSectionsJson, cmd.Body, clock.UtcNow);
         audit.Append(request.Id, AuditAction.Edit, beforeJson: before, afterJson: sectionsJson);
         await unitOfWork.SaveChangesAsync(ct);
     }

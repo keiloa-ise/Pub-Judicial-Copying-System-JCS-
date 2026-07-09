@@ -6,11 +6,11 @@ namespace ResourceIQ.Jcs.Api.Contracts;
 public sealed record CreateCourtRequest(string Code, string Name);
 public sealed record UpdateCourtRequest(string Name, bool IsActive);
 
-public sealed record CreateRoomRequest(Guid CourtId, string Code, string Name, NumberingPolicy NumberingPolicy, string? NumberingLevel);
-public sealed record UpdateRoomRequest(string Name, bool IsActive, NumberingPolicy NumberingPolicy, string? NumberingLevel);
+public sealed record CreateRoomRequest(Guid CourtId, string Code, string Name, NumberingPolicy NumberingPolicy, string? NumberingLevel, CopyNumberingPolicy CopyNumberingPolicy);
+public sealed record UpdateRoomRequest(string Name, bool IsActive, NumberingPolicy NumberingPolicy, string? NumberingLevel, CopyNumberingPolicy CopyNumberingPolicy);
 
 // Numbering start points (FR-17). LastNumber = last issued number; auto numbering continues at +1.
-public sealed record SetCopyNumberStartRequest(Guid CourtId, int Year, int LastNumber);
+public sealed record SetCopyNumberStartRequest(Guid CourtId, Guid? RoomId, int Year, int LastNumber);
 public sealed record SetMiscNumberStartRequest(Guid CourtId, NumberingPolicy Scope, Guid? RoomId, string? Level, int Year, int LastNumber);
 
 public sealed record CreateUserRequest(
