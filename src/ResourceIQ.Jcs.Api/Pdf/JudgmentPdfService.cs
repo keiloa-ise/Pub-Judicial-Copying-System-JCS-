@@ -45,9 +45,11 @@ public sealed class JudgmentPdfService
         var sections = ParseSections(d.SectionsJson);
         var dissentSections = ParseSections(d.DissentSectionsJson);
 
+        // رقم النسخة is {court}/{year}/{seq} or {court}/{room}/{year}/{seq}: court is first, year is
+        // second-to-last, seq is last. Handles both the court-level and room-level formats (FR-03).
         var parts = (d.CopyNumber ?? "").Split('/');
-        var courtCode = parts.Length == 3 ? parts[0] : "";
-        var year = parts.Length == 3 ? parts[1] : G("year");
+        var courtCode = parts.Length >= 3 ? parts[0] : "";
+        var year = parts.Length >= 3 ? parts[^2] : G("year");
         var draft = d.State != CopyState.Approved;
 
         var qrLines = new List<string>();

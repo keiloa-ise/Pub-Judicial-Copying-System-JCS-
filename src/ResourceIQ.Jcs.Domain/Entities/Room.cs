@@ -24,6 +24,13 @@ public class Room
     /// <summary>Special level letter A..Z — set only when <see cref="NumberingPolicy"/> is Special.</summary>
     public string? NumberingLevel { get; set; }
 
+    /// <summary>رقم النسخة (عادي) numbering scope for this room (FR-03). Default = room level.</summary>
+    public CopyNumberingPolicy CopyNumberingPolicy { get; set; } = CopyNumberingPolicy.Room;
+
+    /// <summary>The room id that scopes this room's رقم النسخة counter: the room itself when numbering
+    /// at room level, or <see cref="Guid.Empty"/> (= court-wide scope) when numbering at court level.</summary>
+    public Guid CopyScopeRoomId() => CopyNumberingPolicy == CopyNumberingPolicy.Room ? Id : Guid.Empty;
+
     public ICollection<JudgeRoom> Judges { get; set; } = new List<JudgeRoom>();
 
     /// <summary>The scope key identifying this room's رقم المتفرق sequence (special levels are

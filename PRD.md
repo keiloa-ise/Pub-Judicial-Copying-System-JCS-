@@ -110,7 +110,18 @@ Administrator can create, edit, and disable users, and assign roles.
 
 ### FR-03 — Court & room management
 Administrator can create, edit, activate, and deactivate courts, and manage the rooms (غرف)
-within each court. For each room the Administrator sets the **رقم المتفرق numbering policy**:
+within each court.
+
+**رقم النسخة (عادي) numbering policy — per room:** when creating (or editing, before any number has
+been issued) a room, the Administrator chooses the copy-numbering scope:
+- **مستوى الغرفة (Room level, default):** each room has its own sequential رقم النسخة; the number embeds
+  the room code — `{courtCode}/{roomCode}/{year}/{seq}` — so rooms never collide.
+- **مستوى المحكمة (Court level):** all court-level rooms of the court share one sequence —
+  `{courtCode}/{year}/{seq}`.
+Both reset yearly. The policy **cannot be changed once the room has issued any رقم النسخة** (it would
+mix scopes). Existing rooms were migrated to **room level**. Start points (FR-17) can be seeded at go-live.
+
+For each room the Administrator also sets the **رقم المتفرق numbering policy**:
 - **مستوى المحكمة (Court level):** متفرق copies of the room share one sequence with all of the
   court's court-level rooms.
 - **مستوى الغرفة (Room level):** the room has its own sequence.

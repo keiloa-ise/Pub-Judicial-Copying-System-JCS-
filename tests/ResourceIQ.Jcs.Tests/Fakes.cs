@@ -27,13 +27,13 @@ internal sealed class FakeAllocator(string number = "00000001") : ICopyNumberAll
     public int Calls { get; private set; }
     public int Releases { get; private set; }
     public int? Last { get; set; } // value PeekLastAsync returns (for delete guards)
-    public Task<string> AllocateAsync(Guid courtId, DateOnly reservationDate, CancellationToken ct)
+    public Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct)
     {
         Calls++;
         return Task.FromResult(number);
     }
-    public Task ReleaseAsync(Guid courtId, int year, CancellationToken ct) { Releases++; return Task.CompletedTask; }
-    public Task<int?> PeekLastAsync(Guid courtId, int year, CancellationToken ct) => Task.FromResult(Last);
+    public Task ReleaseAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) { Releases++; return Task.CompletedTask; }
+    public Task<int?> PeekLastAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) => Task.FromResult(Last);
 }
 
 internal sealed class FakeMiscAllocator(int number = 1) : IMiscNumberAllocator

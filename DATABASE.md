@@ -32,6 +32,7 @@ A court is a set of rooms; a copy request targets one room; judges are assigned 
 | IsActive | bit | |
 | **NumberingPolicy** | int | رقم المتفرق scope: 1 = Court level, 2 = Room level, 3 = Special level (FR-03) |
 | **NumberingLevel** | nvarchar(1) | special level letter A–Z — only when NumberingPolicy = Special; null otherwise |
+| **CopyNumberingPolicy** | int | رقم النسخة (عادي) scope: 1 = Court level, 2 = Room level (default). Room level → number embeds the room code (FR-03) |
 
 ### `Judges` — القضاة (FR-04)
 | Column | Type | Notes |
@@ -77,7 +78,7 @@ null = global). Only non-archived paragraphs are insertable.
 | Column | Type | Notes |
 |--------|------|-------|
 | Id 🔑 | uniqueidentifier | |
-| CopyNumber | nvarchar(60) null | رقم النسخة `{courtCode}/{year}/{seq}` for **عادي**; **null for متفرق** (BR-11). ⭐ composite `(CourtId, CopyNumber)` — filtered, so NULLs are allowed |
+| CopyNumber | nvarchar(60) null | رقم النسخة — `{courtCode}/{year}/{seq}` (court-level room) or `{courtCode}/{roomCode}/{year}/{seq}` (room-level room, FR-03); **null for متفرق** (BR-11). ⭐ composite `(CourtId, CopyNumber)` — filtered, so NULLs are allowed |
 | OriginalCopyId 🔗📇 | uniqueidentifier null | BR-11: for **متفرق**, the Approved عادي copy it is based on (self-FK, NoAction). null for عادي |
 | CourtId 🔗📇 | uniqueidentifier | → `Courts` (cascade) |
 | RoomId 🔗 | uniqueidentifier | → `Rooms` (NoAction — avoids multiple cascade paths) |
@@ -125,7 +126,8 @@ Both reset per year (the year = the copy's `ReservationDate.Year`); see FR-17/FR
 | Column | Type | Notes |
 |--------|------|-------|
 | CourtId 🔑🔗 | uniqueidentifier | → `Courts` |
-| Year 🔑 | int | composite PK `(CourtId, Year)` |
+| RoomId 🔑 | uniqueidentifier | numbering scope: `Guid.Empty` = court-wide (court-level rooms share); the room id = per-room sequence (FR-03) |
+| Year 🔑 | int | composite PK `(CourtId, RoomId, Year)` |
 | LastNumber | int | last سيريال issued; next copy = `LastNumber + 1` |
 
 ### `MiscNumberCounters` — عدّاد رقم المتفرق

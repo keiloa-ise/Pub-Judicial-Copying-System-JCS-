@@ -179,8 +179,15 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
     public async Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct) =>
         await (from cc in db.CourtCopyCounters.AsNoTracking()
                join c in db.Courts on cc.CourtId equals c.Id
-               orderby c.Code, cc.Year
-               select new CopyNumberCounterDto(cc.CourtId, c.Code, c.Name, cc.Year, cc.LastNumber)).ToListAsync(ct);
+               join rm in db.Rooms on cc.RoomId equals rm.Id into rmj
+               from room in rmj.DefaultIfEmpty()
+               orderby c.Code, cc.RoomId, cc.Year
+               // RoomId == empty → court-wide sequence; otherwise the room's own sequence.
+               select new CopyNumberCounterDto(
+                   cc.CourtId, c.Code, c.Name,
+                   cc.RoomId == Guid.Empty ? (Guid?)null : cc.RoomId,
+                   cc.RoomId == Guid.Empty ? "مستوى المحكمة" : (room != null ? room.Name : "?"),
+                   cc.Year, cc.LastNumber)).ToListAsync(ct);
 
     public async Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct)
     {
@@ -231,12 +238,12 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         if (courtId is { } cid) q = q.Where(r => r.CourtId == cid);
         if (activeOnly) q = q.Where(r => r.IsActive);
         return await q.OrderBy(r => r.Code).ThenBy(r => r.Name)
-            .Select(r => new RoomDto(r.Id, r.CourtId, r.Code, r.Name, r.IsActive, r.NumberingPolicy, r.NumberingLevel)).ToListAsync(ct);
+            .Select(r => new RoomDto(r.Id, r.CourtId, r.Code, r.Name, r.IsActive, r.NumberingPolicy, r.NumberingLevel, r.CopyNumberingPolicy)).ToListAsync(ct);
     }
 
     public async Task<RoomDto?> GetRoomAsync(Guid roomId, CancellationToken ct) =>
         await db.Rooms.AsNoTracking().Where(r => r.Id == roomId)
-            .Select(r => new RoomDto(r.Id, r.CourtId, r.Code, r.Name, r.IsActive, r.NumberingPolicy, r.NumberingLevel)).FirstOrDefaultAsync(ct);
+            .Select(r => new RoomDto(r.Id, r.CourtId, r.Code, r.Name, r.IsActive, r.NumberingPolicy, r.NumberingLevel, r.CopyNumberingPolicy)).FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndCourtAsync(Role role, Guid courtId, CancellationToken ct) =>
         await db.Users.AsNoTracking()

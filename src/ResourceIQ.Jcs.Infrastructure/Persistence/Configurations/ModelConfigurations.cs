@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ResourceIQ.Jcs.Domain.Entities;
+using ResourceIQ.Jcs.Domain.Enums;
 
 namespace ResourceIQ.Jcs.Infrastructure.Persistence.Configurations;
 
@@ -43,6 +44,8 @@ public sealed class RoomConfiguration : IEntityTypeConfiguration<Room>
         b.Property(x => x.Name).HasMaxLength(300).IsRequired();
         b.Property(x => x.NumberingPolicy).HasConversion<int>();   // رقم المتفرق scope policy (FR-06)
         b.Property(x => x.NumberingLevel).HasMaxLength(1);          // special level A..Z (nullable)
+        // رقم النسخة scope policy (FR-03). Default Room — also backfills existing rooms to room-level.
+        b.Property(x => x.CopyNumberingPolicy).HasConversion<int>().HasDefaultValue(CopyNumberingPolicy.Room);
         // Room code AND name are unique WITHIN its court (confirmed business rule).
         b.HasIndex(x => new { x.CourtId, x.Code }).IsUnique();
         b.HasIndex(x => new { x.CourtId, x.Name }).IsUnique();
@@ -181,7 +184,7 @@ public sealed class CourtCopyCounterConfiguration : IEntityTypeConfiguration<Cou
 {
     public void Configure(EntityTypeBuilder<CourtCopyCounter> b)
     {
-        b.HasKey(x => new { x.CourtId, x.Year });
+        b.HasKey(x => new { x.CourtId, x.RoomId, x.Year });
         b.HasOne(x => x.Court).WithMany().HasForeignKey(x => x.CourtId);
     }
 }

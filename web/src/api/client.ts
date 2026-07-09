@@ -59,12 +59,15 @@ export interface AuditEntry {
 }
 export interface Court { id: string; code: string; name: string; isActive: boolean; }
 export type NumberingPolicy = "Court" | "Room" | "Special";
+/** رقم النسخة (عادي) numbering scope for a room (FR-03). Default Room. */
+export type CopyNumberingPolicy = "Court" | "Room";
 export interface Room {
   id: string; courtId: string; code: string; name: string; isActive: boolean;
   numberingPolicy: NumberingPolicy; numberingLevel: string | null;
+  copyNumberingPolicy: CopyNumberingPolicy;
 }
 /** FR-17: numbering start-point counters (admin go-live setup). */
-export interface CopyNumberCounter { courtId: string; courtCode: string; courtName: string; year: number; lastNumber: number; }
+export interface CopyNumberCounter { courtId: string; courtCode: string; courtName: string; roomId: string | null; scopeLabel: string; year: number; lastNumber: number; }
 export interface MiscNumberCounter { scopeKey: string; courtId: string; courtName: string; scopeLabel: string; year: number; lastNumber: number; }
 
 /** FR-16: the latest عادي copy per court — deletable only when it has no linked متفرق. */
@@ -220,15 +223,15 @@ export const api = {
 
     listRooms: (courtId?: string) =>
       request<Room[]>(`/api/admin/rooms${courtId ? `?courtId=${courtId}` : ""}`),
-    createRoom: (courtId: string, code: string, name: string, numberingPolicy: NumberingPolicy, numberingLevel: string | null) =>
-      request<{ id: string }>("/api/admin/rooms", { method: "POST", body: JSON.stringify({ courtId, code, name, numberingPolicy, numberingLevel }) }),
-    updateRoom: (id: string, name: string, isActive: boolean, numberingPolicy: NumberingPolicy, numberingLevel: string | null) =>
-      request<void>(`/api/admin/rooms/${id}`, { method: "PUT", body: JSON.stringify({ name, isActive, numberingPolicy, numberingLevel }) }),
+    createRoom: (courtId: string, code: string, name: string, numberingPolicy: NumberingPolicy, numberingLevel: string | null, copyNumberingPolicy: CopyNumberingPolicy) =>
+      request<{ id: string }>("/api/admin/rooms", { method: "POST", body: JSON.stringify({ courtId, code, name, numberingPolicy, numberingLevel, copyNumberingPolicy }) }),
+    updateRoom: (id: string, name: string, isActive: boolean, numberingPolicy: NumberingPolicy, numberingLevel: string | null, copyNumberingPolicy: CopyNumberingPolicy) =>
+      request<void>(`/api/admin/rooms/${id}`, { method: "PUT", body: JSON.stringify({ name, isActive, numberingPolicy, numberingLevel, copyNumberingPolicy }) }),
 
     // FR-17: numbering start points.
     listCopyCounters: () => request<CopyNumberCounter[]>("/api/admin/numbering/copy-counters"),
-    setCopyCounter: (courtId: string, year: number, lastNumber: number) =>
-      request<void>("/api/admin/numbering/copy-counters", { method: "PUT", body: JSON.stringify({ courtId, year, lastNumber }) }),
+    setCopyCounter: (courtId: string, roomId: string | null, year: number, lastNumber: number) =>
+      request<void>("/api/admin/numbering/copy-counters", { method: "PUT", body: JSON.stringify({ courtId, roomId, year, lastNumber }) }),
     listMiscCounters: () => request<MiscNumberCounter[]>("/api/admin/numbering/misc-counters"),
     setMiscCounter: (courtId: string, scope: NumberingPolicy, roomId: string | null, level: string | null, year: number, lastNumber: number) =>
       request<void>("/api/admin/numbering/misc-counters", { method: "PUT", body: JSON.stringify({ courtId, scope, roomId, level, year, lastNumber }) }),

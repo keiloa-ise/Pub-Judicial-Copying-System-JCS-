@@ -27,7 +27,7 @@ public class WorkflowServiceTests
         var user = new FakeCurrentUser { Role = Role.RegistryHead };
         user.Courts.Add(court);
         var allocator = new FakeAllocator("00000042");
-        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null) };
+        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null, CopyNumberingPolicy.Room) };
         var svc = new CreateCopyRequestService(user, _clock, _repo, allocator, new FakeMiscAllocator(), _audit, queries, _uow);
 
         var req = await svc.HandleAsync(
