@@ -150,6 +150,38 @@ public class WorkflowServiceTests
             svc.HandleAsync(new UnlockCommand(Guid.NewGuid(), "reason"), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task RegistryHead_can_escalate_non_approved_copy_to_suspended()
+    {
+        var court = Guid.NewGuid();
+        var req = SeedNormal(court);
+        req.AssignToCopyist(Guid.NewGuid(), Now);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new SuspendCopyService(head, _repo, _clock, _audit, _uow);
+
+        await svc.HandleAsync(new SuspendCopyCommand(req.Id), CancellationToken.None);
+
+        Assert.Equal(CaseUrgency.Suspended, req.Urgency);
+        Assert.Contains(AuditAction.Suspend, _audit.Actions);
+    }
+
+    [Fact]
+    public async Task Cannot_escalate_approved_copy_to_suspended()
+    {
+        var court = Guid.NewGuid();
+        var req = SeedApproved(court);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new SuspendCopyService(head, _repo, _clock, _audit, _uow);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.HandleAsync(new SuspendCopyCommand(req.Id), CancellationToken.None));
+
+        Assert.Equal(CaseUrgency.Suspended, req.Urgency);
+        Assert.DoesNotContain(AuditAction.Suspend, _audit.Actions);
+    }
+
     // ── Deletion (FR-16, BR-09/BR-11) ───────────────────────────────────────
     // متفرق: NO رقم النسخة; carries رقم المتفرق = misc and links to an original (BR-11).
     private CopyRequest SeedMisc(Guid court, int misc = 3, Guid? originalId = null)

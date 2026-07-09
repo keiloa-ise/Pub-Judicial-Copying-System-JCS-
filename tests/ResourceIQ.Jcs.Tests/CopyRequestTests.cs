@@ -197,4 +197,30 @@ public class CopyRequestTests
         var ap = Approved();
         Assert.Throws<DomainException>(() => ap.EscalateToExpedited("EXP-1", Now)); // approved → rejected
     }
+
+    [Fact]
+    public void Suspended_copy_cannot_be_downgraded_to_expedited() // FR-06 priority safety
+    {
+        var r = CopyRequest.Create(Guid.NewGuid(), Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now);
+        r.AssignNumber("1/2026/0001");
+
+        Assert.Throws<DomainException>(() => r.EscalateToExpedited("EXP-1", Now));
+        Assert.Equal(CaseUrgency.Suspended, r.Urgency);
+        Assert.Null(r.ExpediteRequestNumber);
+    }
+
+    [Fact]
+    public void Escalate_to_suspended_requires_not_approved_and_clears_expedite_number() // FR-06
+    {
+        var r = CopyRequest.Create(Guid.NewGuid(), Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Expedited, "EXP-9", null, null, Guid.NewGuid(), Now);
+        r.AssignNumber("1/2026/0001");
+
+        r.EscalateToSuspended(Now);
+
+        Assert.Equal(CaseUrgency.Suspended, r.Urgency);
+        Assert.Null(r.ExpediteRequestNumber);
+
+        var ap = Approved();
+        Assert.Throws<DomainException>(() => ap.EscalateToSuspended(Now)); // approved → rejected
+    }
 }

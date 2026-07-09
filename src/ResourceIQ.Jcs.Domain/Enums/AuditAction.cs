@@ -16,4 +16,5 @@ public enum AuditAction
                 // but this audit entry (and all prior ones) is KEPT — audit is never deleted.
     Accept = 8, // Copyist accepts an assigned copy before editing it (acceptance time is recorded).
     Expedite = 9, // Registry Head escalates a non-approved copy to مستعجل (with an expedite number).
+    Suspend = 10, // Registry Head escalates a non-approved copy to موقوف.
 }

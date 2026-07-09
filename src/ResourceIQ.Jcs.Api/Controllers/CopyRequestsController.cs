@@ -23,6 +23,7 @@ public sealed class CopyRequestsController(
     DeleteCopyService deleteService,
     AcceptCopyService acceptService,
     ExpediteCopyService expediteService,
+    SuspendCopyService suspendService,
     PrepareCopyService prepareService,
     SubmitForReviewService submitService,
     ReviewService reviewService,
@@ -127,6 +128,14 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> Expedite(Guid id, ExpediteRequest body, CancellationToken ct)
     {
         await expediteService.HandleAsync(new ExpediteCopyCommand(id, body.ExpediteRequestNumber), ct);
+        return NoContent();
+    }
+
+    /// <summary>FR-06: Registry Head escalates a non-approved copy to موقوف.</summary>
+    [HttpPost("{id:guid}/suspend")]
+    public async Task<IActionResult> Suspend(Guid id, CancellationToken ct)
+    {
+        await suspendService.HandleAsync(new SuspendCopyCommand(id), ct);
         return NoContent();
     }
 
