@@ -47,6 +47,7 @@ public sealed record CopyRequestDetail(
     string FieldValuesJson,
     string SectionsJson,
     string DissentSectionsJson,
+    string RebuttalSectionsJson,
     string Body,
     DateTimeOffset CreatedUtc,
     DateTimeOffset? ApprovedUtc,

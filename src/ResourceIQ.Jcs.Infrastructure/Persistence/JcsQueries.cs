@@ -86,6 +86,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             cr2.Content != null ? cr2.Content.FieldValuesJson : "{}",
             cr2.Content != null ? cr2.Content.SectionsJson : "[]",
             cr2.Content != null ? cr2.Content.DissentSectionsJson : "[]",
+            cr2.Content != null ? cr2.Content.RebuttalSectionsJson : "[]",
             cr2.Content != null ? cr2.Content.Body : "",
             cr2.CreatedUtc, cr2.ApprovedUtc, cr2.AcceptedUtc,
             cr2.OriginalCopyId, row.OriginalCopyNumber, linked);

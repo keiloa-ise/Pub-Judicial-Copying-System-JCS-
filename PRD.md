@@ -189,6 +189,8 @@ requests, completes form fields, adds legal paragraphs, and saves drafts.
   copy's own sequential number (رقم النسخة) and shown read-only.
 - **Dissent (مخالفة القضاة):** the Copyist may mark one or more panel judges — including the room
   president — as **dissenting (مخالف)** and author a dissent appendix stating the reason; see **FR-19**.
+- **Reply to dissent (الرد على المخالفة):** when a dissent exists, the Copyist may mark one or more of
+  the **non-dissenting** judges as authoring a **reply (رد)** and write a reply appendix; see **FR-20**.
 
 ### FR-08 — Dynamic forms
 Administrator can create form templates, define fields, and define validation rules.
@@ -252,6 +254,9 @@ The copy can be printed as the official "إعلام الحكم" document.
   note that a dissenting opinion exists, naming the dissenting judges; and a **dissent appendix** is
   printed on a **new page** after the decision (reason sections + signatures of the dissenting judges
   only).
+- If one or more judges **reply to the dissent (FR-20)**, a **reply appendix** («الرد على الرأي
+  المخالف») is printed on a **new page after the dissent appendix** — reason sections + signatures of
+  the replying judges only.
 
 ### FR-16 — Delete a last decision (Registry Head)
 Deletion is performed only through a dedicated **deletion-operations window** (no per-copy delete
@@ -338,6 +343,25 @@ the dissenting judges.
   judges** (not just the copy room's), and the delegated judge's capacity (صفة) is **auto-set to «ندباً»
   and locked** (non-editable). Stored as `members[].delegated` / `presidentDelegated` in the panel field
   values; the printed capacity is «ندباً». Backward-compatible — existing copies carry no delegation.
+
+### FR-20 — Reply to dissent (الرد على المخالفة)
+When a decision carries a dissenting opinion (FR-19), the panel may respond with a **reply (الرد على
+الرأي المخالف)**: one or more of the **non-dissenting** judges — including the room president — author a
+reply stating the majority's position, signed by the replying judges.
+**Acceptance:**
+- The reply is available **only when at least one judge dissents**. A **«رد» checkbox** appears next to
+  each judge (president and every member); it is **enabled only for a non-dissenting judge** while a
+  dissent exists. A judge can never be **both dissenting and replying** (the two checkboxes are mutually
+  exclusive — ticking one clears the other).
+- When at least one judge replies, a **reply-appendix editor** appears, authored with the **same
+  paragraph/template style** as the main body.
+- **Finalize is blocked** (submit for review / approve) if a reply is marked with no reply text.
+- The printed «إعلام الحكم» adds a **reply appendix on a new page after the dissent appendix**: the reply
+  sections followed by the **signatures of the replying judges only**.
+- Which judges reply is stored inside the copy's panel field values (`members[].replying` +
+  `presidentReplying`); the reply text is a separate content column (`RebuttalSectionsJson`). When no
+  dissent exists the reply flags are cleared on save. Both are **backward-compatible** — existing copies
+  carry no reply.
 
 ## 8. Non-functional requirements
 

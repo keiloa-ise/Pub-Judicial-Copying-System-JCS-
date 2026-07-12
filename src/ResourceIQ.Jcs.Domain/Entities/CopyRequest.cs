@@ -187,7 +187,8 @@ public class CopyRequest
     /// in preparation (BR-04). Legal text is stored verbatim — never truncated or auto-corrected.
     /// </summary>
     public void UpdateContent(
-        Guid? formTemplateId, string fieldValuesJson, string sectionsJson, string dissentSectionsJson, string body, DateTimeOffset nowUtc)
+        Guid? formTemplateId, string fieldValuesJson, string sectionsJson, string dissentSectionsJson,
+        string rebuttalSectionsJson, string body, DateTimeOffset nowUtc)
     {
         EnsureEditable();
         EnsureAccepted(); // FR-07: the Copyist must accept the copy before editing it.
@@ -196,6 +197,7 @@ public class CopyRequest
         Content.FieldValuesJson = string.IsNullOrWhiteSpace(fieldValuesJson) ? "{}" : fieldValuesJson;
         Content.SectionsJson = string.IsNullOrWhiteSpace(sectionsJson) ? "[]" : sectionsJson;
         Content.DissentSectionsJson = string.IsNullOrWhiteSpace(dissentSectionsJson) ? "[]" : dissentSectionsJson;
+        Content.RebuttalSectionsJson = string.IsNullOrWhiteSpace(rebuttalSectionsJson) ? "[]" : rebuttalSectionsJson;
         Content.Body = body ?? string.Empty;
         UpdatedUtc = nowUtc;
     }
@@ -216,7 +218,8 @@ public class CopyRequest
     /// (actor = reviewer) is written there. Legal text is stored verbatim — never auto-corrected.
     /// </summary>
     public void CorrectByReviewer(
-        Guid? formTemplateId, string fieldValuesJson, string sectionsJson, string dissentSectionsJson, string body, DateTimeOffset nowUtc)
+        Guid? formTemplateId, string fieldValuesJson, string sectionsJson, string dissentSectionsJson,
+        string rebuttalSectionsJson, string body, DateTimeOffset nowUtc)
     {
         if (State != CopyState.UnderReview)
             throw new DomainException($"Reviewer correction is only allowed while the copy is under review (was {State}).");
@@ -225,6 +228,7 @@ public class CopyRequest
         Content.FieldValuesJson = string.IsNullOrWhiteSpace(fieldValuesJson) ? "{}" : fieldValuesJson;
         Content.SectionsJson = string.IsNullOrWhiteSpace(sectionsJson) ? "[]" : sectionsJson;
         Content.DissentSectionsJson = string.IsNullOrWhiteSpace(dissentSectionsJson) ? "[]" : dissentSectionsJson;
+        Content.RebuttalSectionsJson = string.IsNullOrWhiteSpace(rebuttalSectionsJson) ? "[]" : rebuttalSectionsJson;
         Content.Body = body ?? string.Empty;
         UpdatedUtc = nowUtc;
     }

@@ -20,6 +20,10 @@ const DECISION_NUMBER_KEY = "decisionNumber";
 /** Field-values key holding whether the panel PRESIDENT dissents ("true"/"false"). Per-member
  *  dissent lives on each member object (PanelMember.dissenting). */
 const PRESIDENT_DISSENT_KEY = "presidentDissenting";
+/** Field-values key holding whether the panel PRESIDENT authors the reply-to-dissent ("true"/"false").
+ *  Per-member reply lives on each member object (PanelMember.replying). A replying judge is never
+ *  also a dissenting judge, and a reply is only meaningful when at least one judge dissents. */
+const PRESIDENT_REPLY_KEY = "presidentReplying";
 /** Field-values key: whether the PRESIDENT is a delegated (ندباً) judge from another room/court.
  *  Per-member delegation lives on each member object (PanelMember.delegated). */
 const PRESIDENT_DELEGATED_KEY = "presidentDelegated";
@@ -61,8 +65,8 @@ function parseMembers(raw: string | undefined): PanelMember[] {
     if (!Array.isArray(a)) return [];
     return a.map((m) =>
       typeof m === "string"
-        ? { judge: m, title: "", dissenting: false, delegated: false }
-        : { judge: String(m?.judge ?? m?.name ?? ""), title: String(m?.title ?? ""), dissenting: Boolean(m?.dissenting), delegated: Boolean(m?.delegated) });
+        ? { judge: m, title: "", dissenting: false, replying: false, delegated: false }
+        : { judge: String(m?.judge ?? m?.name ?? ""), title: String(m?.title ?? ""), dissenting: Boolean(m?.dissenting), replying: Boolean(m?.replying), delegated: Boolean(m?.delegated) });
   } catch { return []; }
 }
 
@@ -162,6 +166,7 @@ export function PreparePage({ id }: { id: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [sections, setSections] = useState<EditSection[]>([]);
   const [dissentSections, setDissentSections] = useState<EditSection[]>([]);
+  const [rebuttalSections, setRebuttalSections] = useState<EditSection[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -193,6 +198,12 @@ export function PreparePage({ id }: { id: string }) {
           ? parsed.map((s) => ({ id: nextSid(), title: s.title ?? "", text: s.text ?? "" }))
           : []);
       } catch { setDissentSections([]); }
+      try {
+        const parsed = JSON.parse(d.rebuttalSectionsJson || "[]");
+        setRebuttalSections(Array.isArray(parsed)
+          ? parsed.map((s) => ({ id: nextSid(), title: s.title ?? "", text: s.text ?? "" }))
+          : []);
+      } catch { setRebuttalSections([]); }
     } catch (e) { setErr((e as Error).message); }
   }, [id]);
 
@@ -237,8 +248,20 @@ export function PreparePage({ id }: { id: string }) {
   // Dissent (مخالفة): the president and/or any member may dissent. When at least one judge
   // dissents, a dissent appendix (reason sections, signed by the dissenters) is required.
   const presidentDissents = !!presidentKey && !!values[presidentKey] && values[PRESIDENT_DISSENT_KEY] === "true";
-  const setPresidentDissents = (on: boolean) => setValues((v) => ({ ...v, [PRESIDENT_DISSENT_KEY]: on ? "true" : "false" }));
+  // Marking the president as dissenting clears any reply flag on them (a judge can't do both).
+  const setPresidentDissents = (on: boolean) => setValues((v) => ({
+    ...v, [PRESIDENT_DISSENT_KEY]: on ? "true" : "false", ...(on ? { [PRESIDENT_REPLY_KEY]: "false" } : {}),
+  }));
   const anyDissent = presidentDissents || members.some((m) => m.judge && !!m.dissenting);
+
+  // Reply to dissent (الرد على المخالفة): available ONLY when a dissent exists. The president and/or
+  // any non-dissenting member may author the reply; a reply appendix (signed by the repliers) is then
+  // required. Marking a judge as replying clears any dissent flag on them (mutually exclusive).
+  const presidentReplies = anyDissent && !!presidentKey && !!values[presidentKey] && !presidentDissents && values[PRESIDENT_REPLY_KEY] === "true";
+  const setPresidentReplies = (on: boolean) => setValues((v) => ({
+    ...v, [PRESIDENT_REPLY_KEY]: on ? "true" : "false", ...(on ? { [PRESIDENT_DISSENT_KEY]: "false" } : {}),
+  }));
+  const anyReply = anyDissent && (presidentReplies || members.some((m) => m.judge && !m.dissenting && !!m.replying));
 
   // Delegation (ندباً): the president/members may be delegated judges from another room/court; their
   // capacity (صفة) is fixed to «ندباً». Toggling delegation resets the judge (the source list changes).
@@ -273,6 +296,8 @@ export function PreparePage({ id }: { id: string }) {
       const cleanMembers = members.filter((m) => m.judge);
       // A dissent is meaningful only for a selected judge; recompute from the cleaned panel.
       const hasDissent = presidentDissents || cleanMembers.some((m) => !!m.dissenting);
+      // A reply is meaningful only when a dissent exists and a non-dissenting judge authors it.
+      const hasReply = hasDissent && (presidentReplies || cleanMembers.some((m) => !m.dissenting && !!m.replying));
       if (finalize) {
         if (presidentKey && !values[presidentKey]) throw new Error(L("يجب اختيار رئيس الهيئة.", "Select the panel president."));
         if (presidentKey && values[presidentKey] && !values[PRESIDENT_TITLE_KEY])
@@ -283,15 +308,24 @@ export function PreparePage({ id }: { id: string }) {
         if (hasDissent && !dissentSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
           throw new Error(L("يجب كتابة سبب المخالفة في ملحق الرأي المخالف.",
                             "Enter the dissent reason in the dissenting-opinion appendix."));
+        // الرد على المخالفة: a reply with no text is rejected.
+        if (hasReply && !rebuttalSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
+          throw new Error(L("يجب كتابة نص الرد في ملحق الرد على الرأي المخالف.",
+                            "Enter the reply text in the reply-to-dissent appendix."));
       }
       const fieldValues = { ...values };
-      if (membersKey) fieldValues[membersKey] = JSON.stringify(cleanMembers);
+      // When there is no dissent a reply is meaningless — strip any stale reply flags before saving.
+      const persistMembers = hasDissent ? cleanMembers : cleanMembers.map((m) => ({ ...m, replying: false }));
+      if (membersKey) fieldValues[membersKey] = JSON.stringify(persistMembers);
+      if (!hasDissent) fieldValues[PRESIDENT_REPLY_KEY] = "false";
       const payload = {
         formTemplateId: formTemplateId || null,
         fieldValuesJson: JSON.stringify(fieldValues),
         sectionsJson: JSON.stringify(sections.map(({ title, text }) => ({ title, text }))),
         // Persist the dissent appendix only when a judge actually dissents; otherwise store empty.
         dissentSectionsJson: hasDissent ? JSON.stringify(dissentSections.map(({ title, text }) => ({ title, text }))) : "[]",
+        // Persist the reply appendix only when a non-dissenting judge replies; otherwise store empty.
+        rebuttalSectionsJson: hasReply ? JSON.stringify(rebuttalSections.map(({ title, text }) => ({ title, text }))) : "[]",
         body: "",
       };
       // The Reviewer saves through the correct endpoint (stays UnderReview); the copyist saves a draft.
@@ -387,8 +421,16 @@ export function PreparePage({ id }: { id: string }) {
                         <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
                           title={L("مخالف للقرار", "Dissents from the decision")}>
                           <input type="checkbox" checked={!!m.dissenting} disabled={!m.judge}
-                            onChange={(e) => setMembers(members.map((x, idx) => idx === i ? { ...x, dissenting: e.target.checked } : x))} />
+                            onChange={(e) => setMembers(members.map((x, idx) => idx === i
+                              ? { ...x, dissenting: e.target.checked, replying: e.target.checked ? false : x.replying }
+                              : x))} />
                           {L("مخالف", "Dissents")}
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
+                          title={L("صاحب الرد على الرأي المخالف", "Authors the reply to the dissent")}>
+                          <input type="checkbox" checked={!!m.replying} disabled={!m.judge || !anyDissent || !!m.dissenting}
+                            onChange={(e) => setMembers(members.map((x, idx) => idx === i ? { ...x, replying: e.target.checked } : x))} />
+                          {L("رد", "Replies")}
                         </label>
                         <button type="button" className="iconbtn iconbtn--danger"
                           onClick={() => setMembers(members.filter((_, idx) => idx !== i))} title={L("حذف عضو", "Remove member")}>✕</button>
@@ -424,6 +466,12 @@ export function PreparePage({ id }: { id: string }) {
                         <input type="checkbox" checked={presidentDissents} disabled={!values[fld.key]}
                           onChange={(e) => setPresidentDissents(e.target.checked)} />
                         {L("مخالف", "Dissents")}
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
+                        title={L("رئيس الغرفة صاحب الرد على الرأي المخالف", "Room president authors the reply to the dissent")}>
+                        <input type="checkbox" checked={presidentReplies} disabled={!values[fld.key] || !anyDissent || presidentDissents}
+                          onChange={(e) => setPresidentReplies(e.target.checked)} />
+                        {L("رد", "Replies")}
                       </label>
                     </div>
                   </div>
@@ -465,6 +513,14 @@ export function PreparePage({ id }: { id: string }) {
           title={L("ملحق: الرأي المخالف", "Appendix: Dissenting opinion")}
           hint={L("يُطبع في صفحة جديدة بعد نهاية القرار، ويُوقّعه القضاة المخالفون.",
                   "Printed on a new page after the decision, signed by the dissenting judges.")} />
+      )}
+
+      {/* ── Reply-to-dissent appendix — only when a non-dissenting judge replies (الرد على المخالفة) ── */}
+      {anyReply && (
+        <SectionsEditor L={L} paragraphs={paragraphs} sections={rebuttalSections} setSections={setRebuttalSections}
+          title={L("ملحق: الرد على الرأي المخالف", "Appendix: Reply to the dissenting opinion")}
+          hint={L("يُطبع في صفحة جديدة بعد ملحق الرأي المخالف، ويُوقّعه القضاة أصحاب الرد.",
+                  "Printed on a new page after the dissent appendix, signed by the replying judges.")} />
       )}
 
       <div className="btn-row">
