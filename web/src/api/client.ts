@@ -45,7 +45,7 @@ export interface CopyRequestListItem {
 export interface LinkedMisc { id: string; miscNumber: number | null; referenceNumber: string | null; state: CopyState; reservationDate: string; }
 export interface CopyRequestDetail extends CopyRequestListItem {
   referenceNumber: string | null;
-  formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string; approvedUtc: string | null;
+  formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string; approvedUtc: string | null;
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
 }
 // CopyRequestDetail inherits acceptedUtc from CopyRequestListItem.
@@ -89,7 +89,7 @@ export interface Judge { id: string; name: string; isActive: boolean; roomIds: s
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
 /** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim). */
-export interface PanelMember { judge: string; title: string; dissenting?: boolean; delegated?: boolean; }
+export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; }
 export interface ParagraphTemplate { id: string; title: string; body: string; isArchived: boolean; formTemplateId: string | null; }
 export interface FormField { id: string; key: string; label: string; type: string; validationRulesJson: string | null; order: number; }
 export interface FormTemplate { id: string; name: string; isActive: boolean; fields: FormField[]; }
@@ -173,11 +173,11 @@ export const api = {
   // FR-16: deletion window — latest عادي per court + last متفرق per scope; delete by copy id.
   deletionTargets: () => request<DeletionTargets>("/api/copy-requests/deletion-targets"),
   deleteRequest: (id: string) => request<void>(`/api/copy-requests/${id}`, { method: "DELETE" }),
-  saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string }) =>
+  saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/content`, { method: "PUT", body: JSON.stringify(body) }),
   submit: (id: string) => request<void>(`/api/copy-requests/${id}/submit`, { method: "POST" }),
   // FR-10: Reviewer corrects the copy in place (same body shape as saveDraft); stays under review.
-  correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string }) =>
+  correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/correct`, { method: "PUT", body: JSON.stringify(body) }),
   approve: (id: string) => request<void>(`/api/copy-requests/${id}/approve`, { method: "POST" }),
   returnForCorrection: (id: string, corrections: string) =>

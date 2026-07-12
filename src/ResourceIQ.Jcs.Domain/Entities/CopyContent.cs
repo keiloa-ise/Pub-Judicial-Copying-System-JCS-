@@ -37,6 +37,16 @@ public class CopyContent
     /// </summary>
     public string DissentSectionsJson { get; set; } = "[]";
 
+    /// <summary>
+    /// Reply-to-dissent appendix (الرد على الرأي المخالف): ordered sections in the same shape as
+    /// <see cref="SectionsJson"/> (JSON array of { "title", "text" }). Meaningful only when a dissent
+    /// exists — it holds the majority's response to the dissenting opinion; it is printed on a NEW
+    /// page AFTER the dissent appendix and signed by the replying judges. "[]" when there is no reply.
+    /// Which judges author the reply is stored inside <see cref="FieldValuesJson"/>
+    /// (members[].replying + presidentReplying); a replying judge is never also a dissenting judge.
+    /// </summary>
+    public string RebuttalSectionsJson { get; set; } = "[]";
+
     /// <summary>Legacy free-text body (superseded by <see cref="SectionsJson"/>). Kept for compatibility.</summary>
     public string Body { get; set; } = string.Empty;
 }

@@ -9,7 +9,8 @@ namespace ResourceIQ.Jcs.Application.Review;
 public sealed record ApproveCommand(Guid CopyRequestId);
 public sealed record ReturnCommand(Guid CopyRequestId, string Corrections);
 public sealed record CorrectCommand(
-    Guid CopyRequestId, Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string Body);
+    Guid CopyRequestId, Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson,
+    string RebuttalSectionsJson, string Body);
 
 /// <summary>
 /// FR-10/FR-11: a Reviewer approves (→ locked, read-only), corrects the content directly
@@ -59,8 +60,9 @@ public sealed class ReviewService(
         var before = request.Content?.SectionsJson;
         var sectionsJson = RichText.SanitizeSectionsJson(cmd.SectionsJson);
         var dissentSectionsJson = RichText.SanitizeSectionsJson(cmd.DissentSectionsJson);
+        var rebuttalSectionsJson = RichText.SanitizeSectionsJson(cmd.RebuttalSectionsJson);
         // CorrectByReviewer requires UnderReview; the copy is NOT moved off that state here.
-        request.CorrectByReviewer(cmd.FormTemplateId, cmd.FieldValuesJson, sectionsJson, dissentSectionsJson, cmd.Body, clock.UtcNow);
+        request.CorrectByReviewer(cmd.FormTemplateId, cmd.FieldValuesJson, sectionsJson, dissentSectionsJson, rebuttalSectionsJson, cmd.Body, clock.UtcNow);
         audit.Append(request.Id, AuditAction.Edit, beforeJson: before, afterJson: sectionsJson);
         await unitOfWork.SaveChangesAsync(ct);
     }
