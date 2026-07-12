@@ -102,6 +102,137 @@ public class WorkflowServiceTests
     }
 
     [Fact]
+    public async Task Reviewer_must_approve_in_priority_order_across_three_tiers() // FR-10 / BR-10
+    {
+        var court = Guid.NewGuid();
+        var suspended = SeedUnderReviewWith(court, CaseUrgency.Suspended, "case-A", "00000001");
+        var expedited = SeedUnderReviewWith(court, CaseUrgency.Expedited, "case-B", "00000002");
+        var normal = SeedUnderReviewWith(court, CaseUrgency.Normal, "case-C", "00000003");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // عادي is blocked while either موقوف or مستعجل is still under review.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(normal.Id), CancellationToken.None));
+        // مستعجل is blocked while موقوف is still under review.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(expedited.Id), CancellationToken.None));
+
+        await svc.ApproveAsync(new ApproveCommand(suspended.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, suspended.State);
+
+        // عادي is still blocked — مستعجل is now next in line.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(normal.Id), CancellationToken.None));
+
+        await svc.ApproveAsync(new ApproveCommand(expedited.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, expedited.State);
+
+        await svc.ApproveAsync(new ApproveCommand(normal.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, normal.State);
+    }
+
+    [Fact]
+    public async Task Reviewer_approves_oldest_first_within_same_tier() // BR-10: same tier, oldest first
+    {
+        var court = Guid.NewGuid();
+        var older = SeedUnderReviewWithCreatedAt(court, CaseUrgency.Normal, "case-A", "00000001", Now.AddDays(-2));
+        var newer = SeedUnderReviewWithCreatedAt(court, CaseUrgency.Normal, "case-B", "00000002", Now.AddDays(-1));
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // The newer same-tier copy cannot be approved while the older one is still under review.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(newer.Id), CancellationToken.None));
+        Assert.Equal(CopyState.UnderReview, newer.State);
+
+        await svc.ApproveAsync(new ApproveCommand(older.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, older.State);
+
+        await svc.ApproveAsync(new ApproveCommand(newer.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, newer.State);
+    }
+
+    [Fact]
+    public async Task Reviewer_approval_blocked_by_higher_ranked_copy_in_another_assigned_court() // BR-10/BR-06
+    {
+        var courtA = Guid.NewGuid();
+        var courtB = Guid.NewGuid();
+        var suspendedInB = SeedUnderReviewWith(courtB, CaseUrgency.Suspended, "case-A", "00000001");
+        var normalInA = SeedUnderReviewWith(courtA, CaseUrgency.Normal, "case-B", "00000002");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(courtA);
+        reviewer.Courts.Add(courtB);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // A higher-ranked copy under review in ANY of the reviewer's courts blocks approval,
+        // not just the same court as the copy being approved.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(normalInA.Id), CancellationToken.None));
+
+        await svc.ApproveAsync(new ApproveCommand(suspendedInB.Id), CancellationToken.None);
+        await svc.ApproveAsync(new ApproveCommand(normalInA.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, normalInA.State);
+    }
+
+    [Fact]
+    public async Task Reviewer_approval_not_blocked_by_higher_ranked_copy_outside_assigned_courts() // BR-06
+    {
+        var courtA = Guid.NewGuid();
+        var courtB = Guid.NewGuid();
+        var suspendedInB = SeedUnderReviewWith(courtB, CaseUrgency.Suspended, "case-A", "00000001");
+        var normalInA = SeedUnderReviewWith(courtA, CaseUrgency.Normal, "case-B", "00000002");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(courtA); // NOT assigned to courtB
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // The higher-ranked copy sits in a court outside the reviewer's assignment, so it must not block.
+        await svc.ApproveAsync(new ApproveCommand(normalInA.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, normalInA.State);
+        Assert.Equal(CopyState.UnderReview, suspendedInB.State);
+    }
+
+    [Fact]
+    public async Task Reviewer_approval_not_blocked_by_non_under_review_higher_priority_copy() // FR-10/BR-10
+    {
+        var court = Guid.NewGuid();
+        // A higher-priority copy that has not been submitted for review yet (still InPreparation)
+        // must not count toward the ranking block — only UnderReview copies rank.
+        var pendingSuspended = CopyRequest.Create(
+            court, Guid.NewGuid(), null, "case-A", new DateOnly(2026, 6, 1),
+            CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now.AddDays(-1));
+        pendingSuspended.AssignNumber("00000001");
+        pendingSuspended.AssignToCopyist(Guid.NewGuid(), Now);
+        _repo.Seed(pendingSuspended);
+
+        var normal = SeedUnderReviewWith(court, CaseUrgency.Normal, "case-B", "00000002");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await svc.ApproveAsync(new ApproveCommand(normal.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, normal.State);
+    }
+
+    [Fact]
+    public async Task Cannot_approve_already_approved_copy() // idempotency guard
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await svc.ApproveAsync(new ApproveCommand(req.Id), CancellationToken.None);
+        Assert.Equal(CopyState.Approved, req.State);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ApproveAsync(new ApproveCommand(req.Id), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Non_reviewer_cannot_approve() // BR-03
     {
         var court = Guid.NewGuid();
@@ -112,6 +243,144 @@ public class WorkflowServiceTests
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
             svc.ApproveAsync(new ApproveCommand(req.Id), CancellationToken.None));
+    }
+
+    // ── Correct directly / Return for correction (FR-10, BR-08) ────────────
+    [Fact]
+    public async Task Reviewer_can_correct_content_directly_and_audit_is_written() // FR-10/BR-08
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await svc.CorrectAsync(
+            new CorrectCommand(req.Id, null, "{}", "[{\"title\":\"t\",\"text\":\"reviewer fix\"}]", "[]", "[]", ""),
+            CancellationToken.None);
+
+        Assert.Equal(CopyState.UnderReview, req.State); // no state change (7C)
+        Assert.Contains("reviewer fix", req.Content!.SectionsJson);
+        Assert.Contains(AuditAction.Edit, _audit.Actions);
+    }
+
+    [Fact]
+    public async Task Reviewer_correction_not_blocked_by_priority_order() // FR-10: only approval is ordered
+    {
+        var court = Guid.NewGuid();
+        var suspended = SeedUnderReviewWith(court, CaseUrgency.Suspended, "case-A", "00000001");
+        var normal = SeedUnderReviewWith(court, CaseUrgency.Normal, "case-B", "00000002");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // Correcting the lower-priority عادي copy succeeds even though the higher-priority
+        // موقوف copy is still under review — direct correction is exempt from BR-10 ordering.
+        await svc.CorrectAsync(
+            new CorrectCommand(normal.Id, null, "{}", "[{\"title\":\"t\",\"text\":\"fix\"}]", "[]", "[]", ""),
+            CancellationToken.None);
+
+        Assert.Equal(CopyState.UnderReview, normal.State);
+        Assert.Contains("fix", normal.Content!.SectionsJson);
+        Assert.Equal(CopyState.UnderReview, suspended.State);
+    }
+
+    [Fact]
+    public async Task Non_reviewer_cannot_correct() // BR-03
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var copyist = new FakeCurrentUser { Role = Role.Copyist };
+        copyist.Courts.Add(court);
+        var svc = new ReviewService(copyist, _clock, _repo, _audit, _uow);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            svc.CorrectAsync(new CorrectCommand(req.Id, null, "{}", "[]", "[]", "[]", ""), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reviewer_cannot_correct_outside_assigned_court() // BR-06
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer }; // not assigned to `court`
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            svc.CorrectAsync(new CorrectCommand(req.Id, null, "{}", "[]", "[]", "[]", ""), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reviewer_can_return_for_correction_and_audit_is_written() // FR-10, 7B
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await svc.ReturnAsync(new ReturnCommand(req.Id, "missing signature"), CancellationToken.None);
+
+        Assert.Equal(CopyState.InPreparation, req.State); // UnderReview → InPreparation (7B)
+        var entry = Assert.Single(_audit.Entries, e => e.Action == AuditAction.Return);
+        Assert.Equal("missing signature", entry.Reason);
+    }
+
+    [Fact]
+    public async Task Return_requires_a_corrections_note() // FR-10
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.ReturnAsync(new ReturnCommand(req.Id, "   "), CancellationToken.None));
+        Assert.Equal(CopyState.UnderReview, req.State);
+    }
+
+    [Fact]
+    public async Task Reviewer_return_not_blocked_by_priority_order() // FR-10: only approval is ordered
+    {
+        var court = Guid.NewGuid();
+        var suspended = SeedUnderReviewWith(court, CaseUrgency.Suspended, "case-A", "00000001");
+        var normal = SeedUnderReviewWith(court, CaseUrgency.Normal, "case-B", "00000002");
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Courts.Add(court);
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        // Returning the lower-priority عادي copy succeeds even though the higher-priority
+        // موقوف copy is still under review — return is exempt from BR-10 ordering.
+        await svc.ReturnAsync(new ReturnCommand(normal.Id, "fix formatting"), CancellationToken.None);
+
+        Assert.Equal(CopyState.InPreparation, normal.State);
+        Assert.Equal(CopyState.UnderReview, suspended.State);
+    }
+
+    [Fact]
+    public async Task Non_reviewer_cannot_return() // BR-03
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var copyist = new FakeCurrentUser { Role = Role.Copyist };
+        copyist.Courts.Add(court);
+        var svc = new ReviewService(copyist, _clock, _repo, _audit, _uow);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            svc.ReturnAsync(new ReturnCommand(req.Id, "reason"), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reviewer_cannot_return_outside_assigned_court() // BR-06
+    {
+        var court = Guid.NewGuid();
+        var req = SeedUnderReview(court);
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer }; // not assigned to `court`
+        var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            svc.ReturnAsync(new ReturnCommand(req.Id, "reason"), CancellationToken.None));
     }
 
     // ── Unlock (FR-12) ──────────────────────────────────────────────────────
@@ -291,7 +560,21 @@ public class WorkflowServiceTests
     // Under-review copy with a chosen urgency/base/number (for the reviewer priority-order test).
     private CopyRequest SeedUnderReviewWith(Guid court, CaseUrgency urgency, string caseBase, string number)
     {
-        var r = CopyRequest.Create(court, Guid.NewGuid(), null, caseBase, new DateOnly(2026, 6, 1), CaseCategory.Normal, urgency, null, null, null, Guid.NewGuid(), Now);
+        var expediteNumber = urgency == CaseUrgency.Expedited ? "EXP-1" : null; // FR-06: required for مستعجل
+        var r = CopyRequest.Create(court, Guid.NewGuid(), null, caseBase, new DateOnly(2026, 6, 1), CaseCategory.Normal, urgency, expediteNumber, null, null, Guid.NewGuid(), Now);
+        r.AssignNumber(number);
+        var copyist = Guid.NewGuid();
+        r.AssignToCopyist(copyist, Now);
+        r.AcceptByCopyist(copyist, Now);
+        r.SubmitForReview(Now);
+        _repo.Seed(r);
+        return r;
+    }
+
+    // Under-review copy with an explicit CreatedUtc (for the same-tier oldest-first test).
+    private CopyRequest SeedUnderReviewWithCreatedAt(Guid court, CaseUrgency urgency, string caseBase, string number, DateTimeOffset createdUtc)
+    {
+        var r = CopyRequest.Create(court, Guid.NewGuid(), null, caseBase, new DateOnly(2026, 6, 1), CaseCategory.Normal, urgency, null, null, null, Guid.NewGuid(), createdUtc);
         r.AssignNumber(number);
         var copyist = Guid.NewGuid();
         r.AssignToCopyist(copyist, Now);
