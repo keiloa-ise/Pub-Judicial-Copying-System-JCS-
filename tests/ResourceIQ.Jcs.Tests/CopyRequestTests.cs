@@ -30,6 +30,36 @@ public class CopyRequestTests
         Assert.NotNull(r.ApprovedUtc);
     }
 
+    // ── قيد الدعوى (CaseFilingDate) future-date guard (JC-23) ───────────────
+    [Fact]
+    public void Create_rejects_future_case_filing_date()
+    {
+        var futureDate = DateOnly.FromDateTime(Now.Date).AddDays(1); // 2026-06-13, one day after "today"
+        Assert.Throws<DomainException>(() => CopyRequest.Create(
+            Guid.NewGuid(), Guid.NewGuid(), futureDate, "case-1", new DateOnly(2026, 6, 1),
+            CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now));
+    }
+
+    [Fact]
+    public void Create_accepts_case_filing_date_equal_to_today()
+    {
+        var todayDate = DateOnly.FromDateTime(Now.Date); // 2026-06-12, same as "today"
+        var r = CopyRequest.Create(
+            Guid.NewGuid(), Guid.NewGuid(), todayDate, "case-1", new DateOnly(2026, 6, 1),
+            CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now);
+        Assert.Equal(todayDate, r.CaseFilingDate);
+    }
+
+    [Fact]
+    public void Create_accepts_past_case_filing_date()
+    {
+        var pastDate = DateOnly.FromDateTime(Now.Date).AddDays(-1); // 2026-06-11, before "today"
+        var r = CopyRequest.Create(
+            Guid.NewGuid(), Guid.NewGuid(), pastDate, "case-1", new DateOnly(2026, 6, 1),
+            CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now);
+        Assert.Equal(pastDate, r.CaseFilingDate);
+    }
+
     [Fact]
     public void Approved_copy_rejects_content_edits() // BR-04
     {

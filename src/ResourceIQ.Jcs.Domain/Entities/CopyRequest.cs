@@ -87,6 +87,10 @@ public class CopyRequest
         if (courtId == Guid.Empty) throw new DomainException("Court is required.");
         if (roomId == Guid.Empty) throw new DomainException("Room is required.");
         if (string.IsNullOrWhiteSpace(caseBaseNumber)) throw new DomainException("Case base number is required.");
+        // JC-23: قيد الدعوى cannot be a future date relative to when the decision is entered into
+        // the system (nowUtc is server time via IClock, never the client's clock).
+        if (caseFilingDate is { } cfd && cfd > DateOnly.FromDateTime(nowUtc.Date))
+            throw new DomainException("تاريخ قيد الدعوى لا يمكن أن يكون تاريخاً مستقبلياً.");
         if (!Enum.IsDefined(category)) throw new DomainException("A valid category (عادي/متفرق) is required.");
         if (!Enum.IsDefined(urgency)) throw new DomainException("A valid status (عادي/موقوف/مستعجل) is required.");
         // FR-06: an expedite-request number is mandatory when the status is مستعجل (Expedited).
