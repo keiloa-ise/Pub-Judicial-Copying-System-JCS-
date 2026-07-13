@@ -156,6 +156,7 @@ public class WorkflowServiceTests
         var court = Guid.NewGuid();
         var req = SeedNormal(court);
         req.AssignToCopyist(Guid.NewGuid(), Now);
+        Assert.Equal(CaseUrgency.Normal, req.Urgency);
         var head = new FakeCurrentUser { Role = Role.RegistryHead };
         head.Courts.Add(court);
         var svc = new SuspendCopyService(head, _repo, _clock, _audit, _uow);
@@ -170,7 +171,8 @@ public class WorkflowServiceTests
     public async Task Cannot_escalate_approved_copy_to_suspended()
     {
         var court = Guid.NewGuid();
-        var req = SeedApproved(court);
+        var req = SeedApproved(court, CaseUrgency.Normal);
+        Assert.Equal(CaseUrgency.Normal, req.Urgency);
         var head = new FakeCurrentUser { Role = Role.RegistryHead };
         head.Courts.Add(court);
         var svc = new SuspendCopyService(head, _repo, _clock, _audit, _uow);
@@ -178,7 +180,7 @@ public class WorkflowServiceTests
         await Assert.ThrowsAsync<DomainException>(() =>
             svc.HandleAsync(new SuspendCopyCommand(req.Id), CancellationToken.None));
 
-        Assert.Equal(CaseUrgency.Suspended, req.Urgency);
+        Assert.Equal(CaseUrgency.Normal, req.Urgency);
         Assert.DoesNotContain(AuditAction.Suspend, _audit.Actions);
     }
 
@@ -308,9 +310,10 @@ public class WorkflowServiceTests
             svc.DeleteAsync(new DeleteCopyRequestCommand(req.Id), CancellationToken.None));
     }
 
-    private CopyRequest SeedUnderReview(Guid court)
+    private CopyRequest SeedUnderReview(Guid court, CaseUrgency urgency = CaseUrgency.Normal)
     {
-        var r = CopyRequest.Create(court, Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now);
+        var expediteRequestNumber = urgency == CaseUrgency.Expedited ? "EXP-1" : null;
+        var r = CopyRequest.Create(court, Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, urgency, expediteRequestNumber, null, null, Guid.NewGuid(), Now);
         r.AssignNumber("00000001");
         var copyist = Guid.NewGuid();
         r.AssignToCopyist(copyist, Now);
@@ -333,9 +336,9 @@ public class WorkflowServiceTests
         return r;
     }
 
-    private CopyRequest SeedApproved(Guid court)
+    private CopyRequest SeedApproved(Guid court, CaseUrgency urgency = CaseUrgency.Normal)
     {
-        var r = SeedUnderReview(court);
+        var r = SeedUnderReview(court, urgency);
         r.Approve(Guid.NewGuid(), Now);
         return r;
     }
