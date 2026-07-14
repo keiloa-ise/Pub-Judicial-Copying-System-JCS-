@@ -26,6 +26,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         if (filter.CreatedById is { } cb) q = q.Where(x => x.cr.CreatedById == cb);
         // null courts => no restriction (admin); a non-null list restricts (empty => no rows).
         if (courts is not null) q = q.Where(x => courts.Contains(x.cr.CourtId));
+        if (filter.RoomId is { } room) q = q.Where(x => x.cr.RoomId == room);
 
         // Advanced-search narrowing
         if (!string.IsNullOrWhiteSpace(filter.CopyNumber))
@@ -88,7 +89,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             cr2.Content != null ? cr2.Content.DissentSectionsJson : "[]",
             cr2.Content != null ? cr2.Content.RebuttalSectionsJson : "[]",
             cr2.Content != null ? cr2.Content.Body : "",
-            cr2.CreatedUtc, cr2.ApprovedUtc, cr2.AcceptedUtc,
+            cr2.CreatedUtc, cr2.ApprovedUtc, cr2.AcceptedUtc, cr2.PrintedUtc,
             cr2.OriginalCopyId, row.OriginalCopyNumber, linked);
     }
 

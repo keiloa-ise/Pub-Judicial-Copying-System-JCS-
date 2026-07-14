@@ -20,6 +20,7 @@ import { PanelTitlesPage } from "../features/admin/PanelTitlesPage";
 import { ParagraphsPage } from "../features/admin/ParagraphsPage";
 import { FormsPage } from "../features/admin/FormsPage";
 import { ReportsDashboardPage } from "../features/reports/ReportsDashboardPage";
+import { BatchPrintPage } from "../features/admin/BatchPrintPage";
 
 interface NavItem { page: string; ar: string; en: string; }
 
@@ -49,6 +50,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { page: "admin-panel-titles", ar: "صفات الهيئة", en: "Panel titles" },
     { page: "admin-paragraphs", ar: "الفقرات", en: "Paragraphs" },
     { page: "admin-forms", ar: "النماذج", en: "Forms" },
+    { page: "admin-batch-print", ar: "طباعة دفعة", en: "Batch print" },
   ],
 };
 
@@ -70,6 +72,7 @@ function Outlet() {
     case "admin-panel-titles": return <PanelTitlesPage />;
     case "admin-paragraphs": return <ParagraphsPage />;
     case "admin-forms": return <FormsPage />;
+    case "admin-batch-print": return <BatchPrintPage />;
     default: return <RequestsListPage />;
   }
 }

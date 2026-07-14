@@ -184,6 +184,53 @@ public class WorkflowServiceTests
         Assert.DoesNotContain(AuditAction.Suspend, _audit.Actions);
     }
 
+    // ── Print policy (FR-15) ────────────────────────────────────────────────
+    [Fact]
+    public async Task Print_must_follow_priority_and_sequence() // FR-15 R1
+    {
+        var court = Guid.NewGuid();
+        var expedited = SeedApproved(court, CaseUrgency.Expedited); // higher priority, unprinted
+        var normal = SeedApproved(court, CaseUrgency.Normal);       // lower priority
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new PrintCopyService(head, _repo, _clock, _audit, _uow);
+
+        // Printing the عادي while the مستعجل is still unprinted is rejected.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.HandleAsync(new PrintCopyCommand(normal.Id), CancellationToken.None));
+
+        // Print the higher-priority one first, then the عادي is allowed.
+        await svc.HandleAsync(new PrintCopyCommand(expedited.Id), CancellationToken.None);
+        await svc.HandleAsync(new PrintCopyCommand(normal.Id), CancellationToken.None);
+        Assert.NotNull(expedited.PrintedUtc);
+        Assert.NotNull(normal.PrintedUtc);
+        Assert.Equal(2, _audit.Actions.Count(a => a == AuditAction.Print));
+    }
+
+    [Fact]
+    public async Task Approved_copy_can_be_reprinted_via_service() // FR-15 (revised): reprint allowed anytime
+    {
+        var court = Guid.NewGuid();
+        var req = SeedApproved(court, CaseUrgency.Normal);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new PrintCopyService(head, _repo, _clock, _audit, _uow);
+
+        await svc.HandleAsync(new PrintCopyCommand(req.Id), CancellationToken.None); // first print
+        Assert.NotNull(req.PrintedUtc);
+        await svc.HandleAsync(new PrintCopyCommand(req.Id), CancellationToken.None); // re-print — allowed
+        Assert.Equal(2, _audit.Actions.Count(a => a == AuditAction.Print));
+    }
+
+    [Fact]
+    public async Task Batch_print_is_administrator_only() // FR-15
+    {
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        var svc = new CopyRequestReadService(reviewer, new FakeQueries(), _clock, new FakeAllocator(), new FakeMiscAllocator());
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListBatchPrintAsync(
+            Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), true, CancellationToken.None));
+    }
+
     // ── Last-issued number (FR-03 / FR-06) ──────────────────────────────────
     [Fact]
     public async Task Last_issued_number_returns_last_and_next_per_category()

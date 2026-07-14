@@ -70,6 +70,13 @@ public class CopyRequest
     public DateTimeOffset? ApprovedUtc { get; private set; }
     public Guid? ApprovedById { get; private set; }
 
+    /// <summary>FR-15 print policy: when the copy was printed in its CURRENT phase (null = not yet
+    /// printed). Cleared on <see cref="Approve"/> and <see cref="Unlock"/> so each approval phase gets
+    /// a fresh print. Drives print ordering (unprinted copies rank ahead) and the once-per-approval
+    /// rule for approved copies (re-print needs an Administrator unlock + re-approval).</summary>
+    public DateTimeOffset? PrintedUtc { get; private set; }
+    public Guid? PrintedById { get; private set; }
+
     public CopyContent? Content { get; private set; }
 
     private CopyRequest() { } // EF
@@ -265,6 +272,21 @@ public class CopyRequest
         State = CopyState.Approved;
         ApprovedById = reviewerId;
         ApprovedUtc = nowUtc;
+        // A newly (re-)approved copy starts UNPRINTED — the approval auto-print (FR-15) is its first,
+        // and after an unlock + re-approval it may be printed once more.
+        PrintedUtc = null;
+        PrintedById = null;
+        UpdatedUtc = nowUtc;
+    }
+
+    /// <summary>FR-15 print policy: records that the copy was printed. The FIRST print (while
+    /// <see cref="PrintedUtc"/> is null) is order-checked by the caller (PrintCopyService); once printed,
+    /// a copy — approved or draft — may be viewed and re-printed at any time. The marker also clears the
+    /// copy from the print-order queue.</summary>
+    public void MarkPrinted(Guid printedById, DateTimeOffset nowUtc)
+    {
+        PrintedUtc = nowUtc;
+        PrintedById = printedById;
         UpdatedUtc = nowUtc;
     }
 
@@ -288,6 +310,9 @@ public class CopyRequest
     {
         CopyStateMachine.EnsureTransition(State, CopyState.Unlocked);
         State = CopyState.Unlocked;
+        // Unlocking opens a fresh phase — clear the print marker so the re-approved copy prints again.
+        PrintedUtc = null;
+        PrintedById = null;
         UpdatedUtc = nowUtc;
     }
 }

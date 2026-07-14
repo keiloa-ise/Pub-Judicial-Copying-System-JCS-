@@ -17,4 +17,5 @@ public enum AuditAction
     Accept = 8, // Copyist accepts an assigned copy before editing it (acceptance time is recorded).
     Expedite = 9, // Registry Head escalates a non-approved copy to مستعجل (with an expedite number).
     Suspend = 10, // Registry Head escalates a non-approved copy to موقوف.
+    Print = 11, // A copy was printed (FR-15). Approved copies print once per approval (re-print needs unlock).
 }

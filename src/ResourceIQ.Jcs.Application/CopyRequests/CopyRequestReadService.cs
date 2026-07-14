@@ -94,6 +94,22 @@ public sealed class CopyRequestReadService(
         return queries.ListSelectableOriginalsAsync(currentUser.CourtIds, roomId, search, OriginalsPageSize, ct);
     }
 
+    /// <summary>FR-15 batch print (Administrator only): the copies in a court+room whose تاريخ الحجز
+    /// falls within [from, to], of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state).
+    /// A read-only administrative export: NOT subject to the single-print order/once rules and it never
+    /// marks copies as printed. Ordering follows the same priority as the work queue.</summary>
+    public Task<IReadOnlyList<CopyRequestListItem>> ListBatchPrintAsync(
+        Guid courtId, Guid roomId, DateOnly from, DateOnly to, bool approved, CancellationToken ct)
+    {
+        Guard.RequireRole(currentUser, Role.Administrator);
+        IReadOnlyCollection<CopyState> states = approved
+            ? [CopyState.Approved]
+            : [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];
+        var filter = new CopyRequestFilter(
+            States: states, CourtIds: [courtId], RoomId: roomId, FromReservation: from, ToReservation: to);
+        return queries.ListCopyRequestsAsync(filter, ct);
+    }
+
     /// <summary>FR-03/FR-06: the last sequential number issued for a court/room scope in the current
     /// year — رقم النسخة for عادي, رقم المتفرق for متفرق — plus the number the next create will get.
     /// Lets the Registry Head see the running number before adding a decision. Court-scoped (BR-06).</summary>

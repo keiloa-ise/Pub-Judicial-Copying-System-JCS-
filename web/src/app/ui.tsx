@@ -40,6 +40,7 @@ export const auditLabels: Record<string, { ar: string; en: string }> = {
   Accept: { ar: "قبول", en: "Accept" },
   Expedite: { ar: "تصعيد إلى مستعجل", en: "Expedite" },
   Suspend: { ar: "تصعيد إلى موقوف", en: "Suspend" },
+  Print: { ar: "طباعة", en: "Print" },
 };
 
 export const numberingPolicyLabels: Record<string, { ar: string; en: string }> = {

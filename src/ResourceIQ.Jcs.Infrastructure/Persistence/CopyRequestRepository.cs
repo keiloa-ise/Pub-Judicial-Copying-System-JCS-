@@ -36,6 +36,20 @@ public sealed class CopyRequestRepository(JcsDbContext db) : ICopyRequestReposit
             // same ranking as copyist acceptance: higher tier, or same tier but created earlier.
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)), ct);
 
+    public Task<bool> AnyUnprintedRankedBeforeAsync(
+        IReadOnlyCollection<Guid> courtIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct)
+    {
+        var q = db.CopyRequests.Where(x => courtIds.Contains(x.CourtId)
+            && x.PrintedUtc == null
+            // same ranking as acceptance/approval: higher tier, or same tier but created earlier.
+            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)));
+        // Approved and non-approved copies form independent print queues (each ordered on its own).
+        q = isApproved
+            ? q.Where(x => x.State == Domain.Enums.CopyState.Approved)
+            : q.Where(x => x.State != Domain.Enums.CopyState.Approved);
+        return q.AnyAsync(ct);
+    }
+
     // FR-16: the only delete path. CopyContent cascades; AuditEntries have no FK/cascade → kept.
     public void Remove(CopyRequest request) => db.CopyRequests.Remove(request);
 }

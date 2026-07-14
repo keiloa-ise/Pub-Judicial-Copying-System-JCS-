@@ -47,6 +47,7 @@ export interface CopyRequestDetail extends CopyRequestListItem {
   referenceNumber: string | null;
   formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string; approvedUtc: string | null;
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
+  printedUtc: string | null; // FR-15: set when printed in the current phase; blocks re-print of approved copies.
 }
 // CopyRequestDetail inherits acceptedUtc from CopyRequestListItem.
 /** BR-11: an Approved عادي copy a متفرق can be based on (the original picker). Carries room so the
@@ -157,10 +158,37 @@ export const api = {
   },
   getRequest: (id: string) => request<CopyRequestDetail>(`/api/copy-requests/${id}`),
   getAudit: (id: string) => request<AuditEntry[]>(`/api/copy-requests/${id}/audit`),
+  // FR-15 batch print (Administrator): preview the matching copies (court+room+date range+kind).
+  batchPrintPreview: (courtId: string, roomId: string, from: string, to: string, approved: boolean) =>
+    request<CopyRequestListItem[]>(
+      `/api/copy-requests/batch-print/preview?courtId=${courtId}&roomId=${roomId}&from=${from}&to=${to}&approved=${approved}`),
+  // FR-15 batch print: download a ZIP with one independent PDF per matching decision.
+  batchPrintZip: async (courtId: string, roomId: string, from: string, to: string, approved: boolean): Promise<Blob> => {
+    const res = await fetch(
+      `${BASE}/api/copy-requests/batch-print?courtId=${courtId}&roomId=${roomId}&from=${from}&to=${to}&approved=${approved}`,
+      { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error ?? `Request failed (${res.status})`);
+    }
+    return res.blob();
+  },
   // FR-15: direct same-origin URL of the server-rendered judgment PDF. Loaded straight into an
   // <iframe> (browser's native PDF viewer) — far more reliable than blob URLs. Authorized by the
   // HttpOnly "jcs_pdf" cookie set at login (the iframe can't send an Authorization header).
   pdfUrl: (id: string) => `${BASE}/api/copy-requests/${id}/pdf`,
+  // FR-15: PRINT (not preview) — enforces print order + once-per-approval, records the print, and
+  // returns the PDF bytes to send to the printer. Throws (with the server's Arabic reason) if blocked.
+  printPdf: async (id: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/api/copy-requests/${id}/print`, {
+      method: "POST", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error ?? `Request failed (${res.status})`);
+    }
+    return res.blob();
+  },
   createRequest: (body: {
     courtId: string; roomId: string; caseFilingDate: string | null; caseBaseNumber: string;
     category: CaseCategory; urgency: CaseUrgency; expediteRequestNumber: string | null;

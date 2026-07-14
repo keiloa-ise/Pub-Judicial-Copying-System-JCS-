@@ -47,6 +47,20 @@ export function RequestDetailPage({ id }: { id: string }) {
     finally { setBusy(false); }
   }
 
+  // FR-15: open the print page and (optionally) auto-fire the print on arrival — the sessionStorage
+  // flag is read by PrintCopyPage. Used by the «طباعة» button and by approval (auto-print, R2).
+  function goPrint(auto: boolean) {
+    if (auto) sessionStorage.setItem("jcs_autoprint_id", id);
+    navigate("print", id);
+  }
+
+  // FR-11 → FR-15 R2: approve, then auto-print the newly-approved copy.
+  async function approveAndPrint() {
+    setBusy(true); setErr(null);
+    try { await api.approve(id); goPrint(true); }
+    catch (e) { setErr((e as Error).message); setBusy(false); }
+  }
+
   if (err && !detail) return <ErrorBox message={err} />;
   if (!detail) return <Spinner label={L("جارٍ التحميل…", "Loading…")} />;
 
@@ -163,8 +177,12 @@ export function RequestDetailPage({ id }: { id: string }) {
 
       {/* Role + state actions */}
       <div className="btn-row">
-        <button className="btn btn--gold" onClick={() => navigate("print", detail.id)}>
-          {L("معاينة وطباعة (إعلام الحكم)", "Preview & print (judgment notice)")}
+        {/* FR-15: معاينة is read-only; طباعة is the controlled action (order + once rules, auto-fires on arrival). */}
+        <button className="btn btn--gold" onClick={() => goPrint(false)}>
+          {L("معاينة", "Preview")}
+        </button>
+        <button className="btn btn--gold" disabled={busy} onClick={() => goPrint(true)}>
+          {L("طباعة (إعلام الحكم)", "Print (judgment notice)")}
         </button>
         {/* FR-07: the copyist must accept before editing. */}
         {isAssignedCopyist && detail.state === "InPreparation" && !detail.acceptedUtc && (
@@ -192,7 +210,7 @@ export function RequestDetailPage({ id }: { id: string }) {
         )}
         {user?.role === "Reviewer" && detail.state === "UnderReview" && (
           <>
-            <button className="btn" disabled={busy} onClick={() => act(() => api.approve(detail.id))}>{L("اعتماد", "Approve")}</button>
+            <button className="btn" disabled={busy} onClick={approveAndPrint}>{L("اعتماد وطباعة", "Approve & print")}</button>
             <button className="btn" disabled={busy} onClick={() => navigate("prepare", detail.id)}>{L("تصحيح مباشر", "Correct directly")}</button>
             <button className="btn btn--ghost" disabled={busy} onClick={() => {
               const c = window.prompt(L("سبب الإعادة للتصحيح:", "Corrections / reason for return:")) ?? "";

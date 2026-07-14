@@ -22,6 +22,39 @@ public class CopyRequestTests
     }
 
     [Fact]
+    public void Approved_copy_can_be_reprinted_anytime() // FR-15 (revised): no once-per-approval limit
+    {
+        var r = Approved();
+        Assert.Null(r.PrintedUtc);
+        r.MarkPrinted(Guid.NewGuid(), Now);       // first print (order-checked by the service)
+        Assert.NotNull(r.PrintedUtc);
+        r.MarkPrinted(Guid.NewGuid(), Now);       // re-print anytime — no throw
+        r.Unlock(Now);                            // an unlock still opens a fresh phase
+        Assert.Null(r.PrintedUtc);                // print marker cleared → re-enters the order queue
+    }
+
+    [Fact]
+    public void Reapproval_clears_the_print_marker() // FR-15
+    {
+        var r = Approved();
+        r.MarkPrinted(Guid.NewGuid(), Now);
+        r.Unlock(Now);                     // → Unlocked
+        r.SubmitForReview(Now);            // → UnderReview
+        r.Approve(Guid.NewGuid(), Now);    // → Approved (fresh phase)
+        Assert.Null(r.PrintedUtc);
+    }
+
+    [Fact]
+    public void Draft_copy_can_be_reprinted() // FR-15 (once-rule is approved-only)
+    {
+        var r = CopyRequest.Create(Guid.NewGuid(), Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Normal, null, null, null, Guid.NewGuid(), Now);
+        r.AssignNumber("1/2026/0001");     // still non-approved (Created)
+        r.MarkPrinted(Guid.NewGuid(), Now);
+        r.MarkPrinted(Guid.NewGuid(), Now); // no throw for a non-approved copy
+        Assert.NotNull(r.PrintedUtc);
+    }
+
+    [Fact]
     public void Happy_path_reaches_approved_and_records_reviewer()
     {
         var r = Approved();

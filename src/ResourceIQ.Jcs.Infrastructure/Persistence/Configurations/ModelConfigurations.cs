@@ -128,6 +128,12 @@ public sealed class CopyRequestConfiguration : IEntityTypeConfiguration<CopyRequ
             .HasFilter("[Category] = 1 AND [State] = 4")
             .IncludeProperties(x => new { x.CopyNumber, x.CaseBaseNumber, x.ReservationDate });
 
+        // FR-15 print ordering: "any higher-ranked UNPRINTED copy in this court" — filtered to the small
+        // set of not-yet-printed rows, covering the rank columns so the check is served from the index.
+        b.HasIndex(x => new { x.CourtId, x.State })
+            .HasFilter("[PrintedUtc] IS NULL")
+            .IncludeProperties(x => new { x.Urgency, x.CreatedUtc });
+
         b.HasOne(x => x.Content).WithOne(c => c.CopyRequest!)
             .HasForeignKey<CopyContent>(c => c.CopyRequestId);
 

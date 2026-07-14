@@ -52,6 +52,7 @@ public sealed record CopyRequestDetail(
     DateTimeOffset CreatedUtc,
     DateTimeOffset? ApprovedUtc,
     DateTimeOffset? AcceptedUtc,
+    DateTimeOffset? PrintedUtc,
     Guid? OriginalCopyId,
     string? OriginalCopyNumber,
     IReadOnlyList<LinkedMiscDto> LinkedMisc);
@@ -145,7 +146,8 @@ public sealed record CopyRequestFilter(
     string? CopyNumber = null,
     string? CaseBaseNumber = null,
     DateOnly? FromReservation = null,
-    DateOnly? ToReservation = null);
+    DateOnly? ToReservation = null,
+    Guid? RoomId = null);
 
 /// <summary>Advanced-search inputs supplied by the user (narrow within their allowed scope).</summary>
 public sealed record CopyRequestSearch(
