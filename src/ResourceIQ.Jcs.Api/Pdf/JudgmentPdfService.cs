@@ -55,12 +55,15 @@ public sealed class JudgmentPdfService
 
         // JC-33: QR payload carries only رقم القرار / تاريخ القرار / المحكمة / الغرفة (chamber/room) —
         // nothing about the copy/متفرق numbering, which stays visible in print but out of the QR.
+        // الغرفة here is the structural Room (d.RoomName) used for copy numbering — NOT G("chamber"),
+        // which is the free-text "الهيئة الحاكمة" panel description shown in the body and is often
+        // left blank, silently dropping the room from the QR.
         var qrLines = new List<string>
         {
             $"رقم القرار: {Dash(G("decisionNumber"))}",
             $"تاريخ القرار: {DecisionDate(G("issueHijri"), G("issueGregorian"))}",
             $"المحكمة: {Dash(d.CourtName)}",
-            $"الغرفة: {Dash(G("chamber"))}",
+            $"الغرفة: {Dash(d.RoomName)}",
         };
         var qr = QrPng(string.Join("\n", qrLines));
 
