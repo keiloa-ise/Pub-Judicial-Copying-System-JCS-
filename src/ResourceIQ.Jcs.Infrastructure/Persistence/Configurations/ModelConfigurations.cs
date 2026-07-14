@@ -121,6 +121,13 @@ public sealed class CopyRequestConfiguration : IEntityTypeConfiguration<CopyRequ
         // رقم الأساس, so they are excluded via a filtered index ([Category] = 1 is Normal).
         b.HasIndex(x => new { x.CourtId, x.CaseBaseNumber }).IsUnique().HasFilter("[Category] = 1");
 
+        // BR-11 متفرق original-picker: seek the chosen room's Approved عادي copies only (never a scan
+        // over all copies). Filtered to Category=Normal(1) AND State=Approved(4); covers the columns
+        // the picker returns so it can be served entirely from the index at any table size (500k+).
+        b.HasIndex(x => new { x.CourtId, x.RoomId })
+            .HasFilter("[Category] = 1 AND [State] = 4")
+            .IncludeProperties(x => new { x.CopyNumber, x.CaseBaseNumber, x.ReservationDate });
+
         b.HasOne(x => x.Content).WithOne(c => c.CopyRequest!)
             .HasForeignKey<CopyContent>(c => c.CopyRequestId);
 

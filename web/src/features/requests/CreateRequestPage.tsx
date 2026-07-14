@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption } from "../../api/client";
+import { useEffect, useState, type FormEvent } from "react";
+import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption, type LastNumber } from "../../api/client";
 import { useNav } from "../../app/nav";
 import { useL, ErrorBox, categoryLabels, urgencyLabels } from "../../app/ui";
 import { useI18n } from "../../i18n";
@@ -25,6 +25,8 @@ export function CreateRequestPage() {
   const [courtId, setCourtId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [originalId, setOriginalId] = useState("");
+  const [originalSearch, setOriginalSearch] = useState("");
+  const [lastNo, setLastNo] = useState<LastNumber | null>(null);
   const [copyistId, setCopyistId] = useState("");
   const [filingDate, setFilingDate] = useState("");
   const [caseBase, setCaseBase] = useState("");
@@ -36,34 +38,54 @@ export function CreateRequestPage() {
   const [busy, setBusy] = useState(false);
 
   const isMisc = category === "Miscellaneous";
-  const chosenOriginal = useMemo(() => originals.find((o) => o.id === originalId), [originals, originalId]);
-  // For متفرق the effective court is the original's court; for عادي it's the selected court.
-  const effectiveCourt = isMisc ? (chosenOriginal?.courtId ?? "") : courtId;
 
   useEffect(() => {
     api.lookupCourts().then(setCourts).catch((e) => setErr(e.message));
-    api.originals().then(setOriginals).catch((e) => setErr(e.message));
   }, []);
 
-  // Copyists follow the effective court (selected court, or the original's court for متفرق).
+  // متفرق picker: fetch the chosen room's Approved originals from the server — filtered + capped there,
+  // so the payload is bounded at any table size (500k+). Debounced so typing in the search box is cheap.
+  useEffect(() => {
+    if (!isMisc || !roomId) { setOriginals([]); return; }
+    const handle = setTimeout(() => {
+      api.originals(roomId, originalSearch.trim()).then(setOriginals).catch((e) => setErr(e.message));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [isMisc, roomId, originalSearch]);
+
+  // Copyists follow the selected court (both عادي and متفرق now pick court + room).
   useEffect(() => {
     setCopyistId("");
-    if (!effectiveCourt) { setCopyists([]); return; }
-    api.lookupCopyists(effectiveCourt).then(setCopyists).catch((e) => setErr(e.message));
-  }, [effectiveCourt]);
+    if (!courtId) { setCopyists([]); return; }
+    api.lookupCopyists(courtId).then(setCopyists).catch((e) => setErr(e.message));
+  }, [courtId]);
 
-  // Rooms apply to عادي only.
+  // Rooms follow the selected court (for both عادي and متفرق). Reset the room when the court changes.
   useEffect(() => {
-    if (isMisc || !courtId) { setRooms([]); setRoomId(""); return; }
+    setRoomId("");
+    if (!courtId) { setRooms([]); return; }
     api.lookupRooms(courtId).then(setRooms).catch((e) => setErr(e.message));
-  }, [courtId, isMisc]);
+  }, [courtId]);
+
+  // A stale original from another court/room must never survive a court/room change.
+  useEffect(() => { setOriginalId(""); setOriginalSearch(""); }, [courtId, roomId]);
+
+  // FR-03/FR-06: once court+room are chosen, show the last issued number for that scope this year.
+  useEffect(() => {
+    setLastNo(null);
+    if (!courtId || !roomId) return;
+    let cancelled = false;
+    api.lastNumber(courtId, roomId, category).then((r) => { if (!cancelled) setLastNo(r); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [courtId, roomId, category]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setErr(null); setBusy(true);
     try {
+      if (isMisc && !originalId) throw new Error(L("يجب اختيار النسخة الأصلية (قرار معتمد).", "Select the original (Approved) copy."));
       const res = await api.createRequest({
-        courtId: isMisc ? (chosenOriginal?.courtId ?? "") : courtId,
+        courtId,                                           // متفرق: server re-derives court from the original
         roomId: isMisc ? EMPTY_GUID : roomId,              // متفرق: server uses the original's room
         caseBaseNumber: isMisc ? "" : caseBase,            // متفرق: server uses the original's رقم الأساس
         assignedCopyistId: copyistId,
@@ -101,33 +123,57 @@ export function CreateRequestPage() {
           </label>
         </div>
 
-        {isMisc ? (
+        {/* Court + Room — chosen for both عادي and متفرق (متفرق uses them to narrow the originals picker). */}
+        <div className="row">
+          <label className="field">
+            <span>{L("المحكمة", "Court")}</span>
+            <select value={courtId} onChange={(e) => setCourtId(e.target.value)} required>
+              <option value="" disabled>{L("اختر المحكمة", "Select court")}</option>
+              {courts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span>{L("الغرفة", "Room")}</span>
+            <select value={roomId} onChange={(e) => setRoomId(e.target.value)} required disabled={!courtId}>
+              <option value="" disabled>{L("اختر الغرفة", "Select room")}</option>
+              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}
+            </select>
+          </label>
+        </div>
+
+        {/* FR-03/FR-06: last issued number for the chosen court+room scope this year, and the next to allocate. */}
+        {courtId && roomId && lastNo && (
+          <p className="muted" style={{ fontSize: 13 }}>
+            {isMisc ? L("رقم المتفرق", "Misc no.") : L("رقم النسخة", "Copy no.")} — {L("آخر رقم صدر", "Last issued")}:{" "}
+            <strong>{lastNo.last ?? L("لا يوجد", "none")}</strong> — {L("التالي", "Next")}: <strong>{lastNo.next}</strong>
+          </p>
+        )}
+
+        {/* متفرق: pick the Approved original within the chosen court+room — searchable by رقم النسخة / رقم الأساس. */}
+        {isMisc && (
           <div className="row">
-            <label className="field" style={{ flex: 2 }}>
+            <label className="field" style={{ flexBasis: "100%" }}>
               <span>{L("النسخة الأصلية (قرار معتمد)", "Original copy (Approved)")}</span>
-              <select value={originalId} onChange={(e) => setOriginalId(e.target.value)} required>
-                <option value="" disabled>{L("اختر النسخة الأصلية", "Select original copy")}</option>
-                {originals.map((o) => (
-                  <option key={o.id} value={o.id}>{o.copyNumber} — {o.courtName} — {L("أساس", "base")} {o.caseBaseNumber}</option>
+              <input value={originalSearch} onChange={(e) => setOriginalSearch(e.target.value)} disabled={!roomId}
+                placeholder={L("ابحث برقم النسخة أو رقم الأساس…", "Search by copy no. or base no.…")} />
+              <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border, #ccc)", borderRadius: 8, marginTop: 6 }}>
+                {!roomId ? (
+                  <p className="muted" style={{ padding: 10, margin: 0 }}>{L("اختر المحكمة والغرفة أولاً.", "Choose a court and room first.")}</p>
+                ) : originals.length === 0 ? (
+                  <p className="muted" style={{ padding: 10, margin: 0 }}>{L("لا توجد قرارات معتمدة مطابقة في هذه الغرفة.", "No matching Approved decisions in this room.")}</p>
+                ) : originals.map((o) => (
+                  <button type="button" key={o.id} onClick={() => setOriginalId(o.id)}
+                    style={{
+                      display: "block", width: "100%", textAlign: "start", padding: "8px 10px", cursor: "pointer",
+                      border: "none", borderBottom: "1px solid var(--border, #eee)",
+                      background: o.id === originalId ? "var(--green-100, #e6f4ea)" : "transparent",
+                      fontWeight: o.id === originalId ? 600 : 400,
+                    }}>
+                    {o.copyNumber} — {L("أساس", "base")} {o.caseBaseNumber}
+                  </button>
                 ))}
-              </select>
-            </label>
-          </div>
-        ) : (
-          <div className="row">
-            <label className="field">
-              <span>{L("المحكمة", "Court")}</span>
-              <select value={courtId} onChange={(e) => setCourtId(e.target.value)} required>
-                <option value="" disabled>{L("اختر المحكمة", "Select court")}</option>
-                {courts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>{L("الغرفة", "Room")}</span>
-              <select value={roomId} onChange={(e) => setRoomId(e.target.value)} required disabled={!courtId}>
-                <option value="" disabled>{L("اختر الغرفة", "Select room")}</option>
-                {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}
-              </select>
+              </div>
+              {!originalId && <span className="muted" style={{ fontSize: 12 }}>{L("يجب اختيار النسخة الأصلية.", "Select the original copy.")}</span>}
             </label>
           </div>
         )}
@@ -135,7 +181,7 @@ export function CreateRequestPage() {
         <div className="row">
           <label className="field">
             <span>{L("الناسخ المكلَّف", "Assigned copyist")}</span>
-            <select value={copyistId} onChange={(e) => setCopyistId(e.target.value)} required disabled={!effectiveCourt}>
+            <select value={copyistId} onChange={(e) => setCopyistId(e.target.value)} required disabled={!courtId}>
               <option value="" disabled>{L("اختر الناسخ", "Select copyist")}</option>
               {copyists.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

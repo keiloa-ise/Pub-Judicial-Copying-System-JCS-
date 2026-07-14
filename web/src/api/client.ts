@@ -49,8 +49,11 @@ export interface CopyRequestDetail extends CopyRequestListItem {
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
 }
 // CopyRequestDetail inherits acceptedUtc from CopyRequestListItem.
-/** BR-11: an Approved عادي copy a متفرق can be based on (the original picker). */
-export interface OriginalCopyOption { id: string; copyNumber: string; courtId: string; courtName: string; caseBaseNumber: string; reservationDate: string; }
+/** BR-11: an Approved عادي copy a متفرق can be based on (the original picker). Carries room so the
+ *  create form can narrow the picker to the chosen court+room. */
+export interface OriginalCopyOption { id: string; copyNumber: string; courtId: string; courtName: string; roomId: string; roomName: string; caseBaseNumber: string; reservationDate: string; }
+/** FR-03/FR-06: last sequential number issued for a court/room scope this year, and the next to allocate. */
+export interface LastNumber { last: number | null; next: number; }
 /** A dynamic, editable section of a copy (inserted from a paragraph template). */
 export interface CopySection { title: string; text: string; }
 export interface AuditEntry {
@@ -170,7 +173,13 @@ export const api = {
     request<void>(`/api/copy-requests/${id}/expedite`, { method: "POST", body: JSON.stringify({ expediteRequestNumber }) }),
   suspend: (id: string) => request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST" }),
   // BR-11: Approved عادي copies a متفرق can be based on.
-  originals: () => request<OriginalCopyOption[]>("/api/copy-requests/originals"),
+  // BR-11: Approved originals for the متفرق picker — filtered server-side to a room (+ optional search),
+  // capped server-side, so the payload stays small no matter how many approved copies exist.
+  originals: (roomId: string, search: string) =>
+    request<OriginalCopyOption[]>(`/api/copy-requests/originals?roomId=${roomId}&search=${encodeURIComponent(search)}`),
+  // FR-03/FR-06: last issued sequential number for a court/room scope (عادي → رقم النسخة, متفرق → رقم المتفرق).
+  lastNumber: (courtId: string, roomId: string, category: CaseCategory) =>
+    request<LastNumber>(`/api/copy-requests/last-number?courtId=${courtId}&roomId=${roomId}&category=${category}`),
   // FR-16: deletion window — latest عادي per court + last متفرق per scope; delete by copy id.
   deletionTargets: () => request<DeletionTargets>("/api/copy-requests/deletion-targets"),
   deleteRequest: (id: string) => request<void>(`/api/copy-requests/${id}`, { method: "DELETE" }),

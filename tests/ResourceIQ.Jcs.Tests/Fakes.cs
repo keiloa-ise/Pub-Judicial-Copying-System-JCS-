@@ -107,7 +107,7 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<Guid?> GetLatestCopyRequestIdAsync(IReadOnlyCollection<Guid>? courtIds, CancellationToken ct) => Task.FromResult(LatestId);
     public Task<DeletionTargetsDto> ListDeletionTargetsAsync(IReadOnlyCollection<Guid>? courtIds, int year, CancellationToken ct)
         => Task.FromResult(new DeletionTargetsDto([], []));
-    public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(IReadOnlyCollection<Guid>? courtIds, CancellationToken ct)
+    public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<OriginalCopyOption>>([]);
     public Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CopyNumberCounterDto>>([]);

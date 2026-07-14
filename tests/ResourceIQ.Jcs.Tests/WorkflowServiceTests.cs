@@ -184,6 +184,51 @@ public class WorkflowServiceTests
         Assert.DoesNotContain(AuditAction.Suspend, _audit.Actions);
     }
 
+    // ── Last-issued number (FR-03 / FR-06) ──────────────────────────────────
+    [Fact]
+    public async Task Last_issued_number_returns_last_and_next_per_category()
+    {
+        var court = Guid.NewGuid();
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        // عادي reads the رقم النسخة allocator (41 → next 42); متفرق reads the رقم المتفرق one (7 → next 8).
+        var svc = new CopyRequestReadService(head, new FakeQueries(), _clock,
+            new FakeAllocator { Last = 41 }, new FakeMiscAllocator { Last = 7 });
+
+        var normal = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None);
+        Assert.Equal(41, normal.Last);
+        Assert.Equal(42, normal.Next);
+
+        var misc = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Miscellaneous, CancellationToken.None);
+        Assert.Equal(7, misc.Last);
+        Assert.Equal(8, misc.Next);
+    }
+
+    [Fact]
+    public async Task Last_issued_number_empty_scope_starts_next_at_one()
+    {
+        var court = Guid.NewGuid();
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new CopyRequestReadService(head, new FakeQueries(), _clock,
+            new FakeAllocator { Last = null }, new FakeMiscAllocator { Last = null });
+
+        var r = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None);
+        Assert.Null(r.Last);
+        Assert.Equal(1, r.Next);
+    }
+
+    [Fact]
+    public async Task Last_issued_number_is_court_scoped() // BR-06
+    {
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(Guid.NewGuid()); // assigned to a DIFFERENT court
+        var svc = new CopyRequestReadService(head, new FakeQueries(), _clock, new FakeAllocator(), new FakeMiscAllocator());
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            svc.GetLastIssuedNumberAsync(Guid.NewGuid(), Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None));
+    }
+
     // ── Deletion (FR-16, BR-09/BR-11) ───────────────────────────────────────
     // متفرق: NO رقم النسخة; carries رقم المتفرق = misc and links to an original (BR-11).
     private CopyRequest SeedMisc(Guid court, int misc = 3, Guid? originalId = null)

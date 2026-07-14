@@ -92,10 +92,18 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> DeletionTargets(CancellationToken ct) =>
         Ok(await readService.ListDeletionTargetsAsync(ct));
 
-    /// <summary>BR-11: Approved عادي copies a Registry Head may base a new متفرق on (the original picker).</summary>
+    /// <summary>BR-11: Approved عادي copies a Registry Head may base a new متفرق on (the original picker),
+    /// filtered server-side to the chosen room (+ optional search) so the payload stays bounded at any scale.</summary>
     [HttpGet("originals")]
-    public async Task<IActionResult> Originals(CancellationToken ct) =>
-        Ok(await readService.ListSelectableOriginalsAsync(ct));
+    public async Task<IActionResult> Originals([FromQuery] Guid roomId, [FromQuery] string? search, CancellationToken ct) =>
+        Ok(await readService.ListSelectableOriginalsAsync(roomId, search, ct));
+
+    /// <summary>FR-03/FR-06: last sequential number issued for a court/room scope this year (+ the next
+    /// number) — رقم النسخة for عادي, رقم المتفرق for متفرق. Shown as the Registry Head builds a request.</summary>
+    [HttpGet("last-number")]
+    public async Task<IActionResult> LastNumber(
+        [FromQuery] Guid courtId, [FromQuery] Guid roomId, [FromQuery] CaseCategory category, CancellationToken ct) =>
+        Ok(await readService.GetLastIssuedNumberAsync(courtId, roomId, category, ct));
 
     /// <summary>FR-16: Registry Head deletes the latest copy in a court regardless of type (hard
     /// delete; رقم النسخة — and رقم المتفرق if متفرق — rolled back so no gap; audit kept).</summary>

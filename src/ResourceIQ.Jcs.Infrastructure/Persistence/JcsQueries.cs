@@ -157,16 +157,25 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
     }
 
     public async Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(
-        IReadOnlyCollection<Guid>? courtIds, CancellationToken ct)
+        IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct)
     {
         var ids = courtIds?.ToArray();
+        // Filtered to a single room (backed by the filtered index on Category=Normal AND State=Approved),
+        // so even 500k+ approved copies never materialize — only the chosen room's rows are seeked.
         var q = from cr in db.CopyRequests.AsNoTracking()
                 join c in db.Courts on cr.CourtId equals c.Id
-                where cr.Category == CaseCategory.Normal && cr.State == CopyState.Approved && cr.CopyNumber != null
-                select new { cr.Id, CopyNumber = cr.CopyNumber!, cr.CourtId, CourtName = c.Name, cr.CaseBaseNumber, cr.ReservationDate };
+                join rm in db.Rooms on cr.RoomId equals rm.Id
+                where cr.RoomId == roomId
+                      && cr.Category == CaseCategory.Normal && cr.State == CopyState.Approved && cr.CopyNumber != null
+                select new { cr.Id, CopyNumber = cr.CopyNumber!, cr.CourtId, CourtName = c.Name, cr.RoomId, RoomName = rm.Name, cr.CaseBaseNumber, cr.ReservationDate };
         if (ids is not null) q = q.Where(x => ids.Contains(x.CourtId));
-        return await q.OrderBy(x => x.CourtName).ThenBy(x => x.CopyNumber)
-            .Select(x => new OriginalCopyOption(x.Id, x.CopyNumber, x.CourtId, x.CourtName, x.CaseBaseNumber, x.ReservationDate))
+        var term = search?.Trim();
+        if (!string.IsNullOrEmpty(term))
+            q = q.Where(x => x.CopyNumber.Contains(term) || x.CaseBaseNumber.Contains(term));
+        var cap = Math.Max(1, limit); // hard cap — the payload never grows with the table
+        return await q.OrderBy(x => x.CopyNumber)
+            .Take(cap)
+            .Select(x => new OriginalCopyOption(x.Id, x.CopyNumber, x.CourtId, x.CourtName, x.RoomId, x.RoomName, x.CaseBaseNumber, x.ReservationDate))
             .ToListAsync(ct);
     }
 
