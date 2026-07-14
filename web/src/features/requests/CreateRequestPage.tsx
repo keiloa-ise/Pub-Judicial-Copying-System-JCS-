@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption, type LastNumber } from "../../api/client";
 import { useNav } from "../../app/nav";
 import { useL, ErrorBox, categoryLabels, urgencyLabels } from "../../app/ui";
@@ -44,14 +44,28 @@ export function CreateRequestPage() {
   }, []);
 
   // متفرق picker: fetch the chosen room's Approved originals from the server — filtered + capped there,
-  // so the payload is bounded at any table size (500k+). Debounced so typing in the search box is cheap.
+  // so the payload is bounded at any table size (500k+). Search runs on Enter only.
+  function searchOriginals() {
+    if (!isMisc || !roomId) { setOriginals([]); return; }
+    api.originals(roomId, originalSearch.trim()).then(setOriginals).catch((e) => setErr(e.message));
+  }
+
+  // When the room changes, load the unfiltered list once.
   useEffect(() => {
     if (!isMisc || !roomId) { setOriginals([]); return; }
-    const handle = setTimeout(() => {
-      api.originals(roomId, originalSearch.trim()).then(setOriginals).catch((e) => setErr(e.message));
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [isMisc, roomId, originalSearch]);
+    let cancelled = false;
+    api.originals(roomId, "")
+      .then((data) => { if (!cancelled) setOriginals(data); })
+      .catch((e) => { if (!cancelled) setErr(e.message); });
+    return () => { cancelled = true; };
+  }, [isMisc, roomId]);
+
+  function onOriginalSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      searchOriginals();
+    }
+  }
 
   // Copyists follow the selected court (both عادي and متفرق now pick court + room).
   useEffect(() => {
@@ -154,7 +168,7 @@ export function CreateRequestPage() {
           <div className="row">
             <label className="field" style={{ flexBasis: "100%" }}>
               <span>{L("النسخة الأصلية (قرار معتمد)", "Original copy (Approved)")}</span>
-              <input value={originalSearch} onChange={(e) => setOriginalSearch(e.target.value)} disabled={!roomId}
+              <input value={originalSearch} onChange={(e) => setOriginalSearch(e.target.value)} onKeyDown={onOriginalSearchKeyDown} disabled={!roomId}
                 placeholder={L("ابحث برقم النسخة أو رقم الأساس…", "Search by copy no. or base no.…")} />
               <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border, #ccc)", borderRadius: 8, marginTop: 6 }}>
                 {!roomId ? (
