@@ -9,6 +9,7 @@ import { useI18n } from "../../i18n";
 const STAGE_AR: Record<string, string> = {
   Create: "بانتظار قبول الناسخ", Accept: "التحضير لدى الناسخ", Submit: "المراجعة لدى المدقق",
   Return: "إعادة التحضير", Approve: "بعد الاعتماد", Unlock: "بعد الفتح", Edit: "تعديل", Expedite: "بعد التصعيد",
+  Suspend: "بعد التصعيد إلى موقوف",
 };
 function fmtDuration(ms: number): string {
   const mins = Math.max(0, Math.round(ms / 60000));
@@ -177,11 +178,17 @@ export function RequestDetailPage({ id }: { id: string }) {
           </button>
         )}
         {/* FR-06: Registry Head escalates a non-approved copy to مستعجل. */}
-        {user?.role === "RegistryHead" && detail.state !== "Approved" && detail.urgency !== "Expedited" && (
+        {user?.role === "RegistryHead" && detail.state !== "Approved" && detail.urgency === "Normal" && (
           <button className="btn btn--ghost" disabled={busy} onClick={() => {
             const no = window.prompt(L("رقم طلب الاستعجال:", "Expedite request number:")) ?? "";
             if (no.trim()) act(() => api.expedite(detail.id, no.trim()));
           }}>{L("تصعيد إلى مستعجل", "Escalate to expedited")}</button>
+        )}
+        {/* FR-06: Registry Head escalates a non-approved copy to موقوف. */}
+        {user?.role === "RegistryHead" && detail.state !== "Approved" && detail.urgency !== "Suspended" && (
+          <button className="btn btn--ghost" disabled={busy} onClick={() => act(() => api.suspend(detail.id))}>
+            {L("تصعيد إلى موقوف", "Escalate to suspended")}
+          </button>
         )}
         {user?.role === "Reviewer" && detail.state === "UnderReview" && (
           <>

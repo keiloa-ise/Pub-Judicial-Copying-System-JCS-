@@ -164,10 +164,11 @@ export const api = {
     referenceNumber: string | null; assignedCopyistId: string; originalCopyId: string | null;
   }) => request<{ id: string; copyNumber: string; state: string }>(
     "/api/copy-requests", { method: "POST", body: JSON.stringify(body) }),
-  // FR-07: copyist accepts the copy before editing. FR-06: head escalates a non-approved copy to مستعجل.
+  // FR-07: copyist accepts the copy before editing. FR-06: head escalates a non-approved copy.
   accept: (id: string) => request<void>(`/api/copy-requests/${id}/accept`, { method: "POST" }),
   expedite: (id: string, expediteRequestNumber: string) =>
     request<void>(`/api/copy-requests/${id}/expedite`, { method: "POST", body: JSON.stringify({ expediteRequestNumber }) }),
+  suspend: (id: string) => request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST" }),
   // BR-11: Approved عادي copies a متفرق can be based on.
   originals: () => request<OriginalCopyOption[]>("/api/copy-requests/originals"),
   // FR-16: deletion window — latest عادي per court + last متفرق per scope; delete by copy id.

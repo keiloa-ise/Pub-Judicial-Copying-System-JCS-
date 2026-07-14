@@ -164,10 +164,23 @@ public class CopyRequest
     {
         if (State == CopyState.Approved)
             throw new DomainException("لا يمكن تغيير حالة قرار معتمد.");
+        if (Urgency == CaseUrgency.Suspended)
+            throw new DomainException("لا يمكن تخفيض حالة قرار موقوف إلى مستعجل.");
         if (string.IsNullOrWhiteSpace(expediteRequestNumber))
             throw new DomainException("رقم طلب الاستعجال مطلوب عند التصعيد إلى «مستعجل».");
         Urgency = CaseUrgency.Expedited;
         ExpediteRequestNumber = expediteRequestNumber.Trim();
+        UpdatedUtc = nowUtc;
+    }
+
+    /// <summary>FR-06: a non-approved copy may be escalated to موقوف at any time (Registry Head).
+    /// This is the highest work-queue priority and does not require an expedite-request number.</summary>
+    public void EscalateToSuspended(DateTimeOffset nowUtc)
+    {
+        if (State == CopyState.Approved)
+            throw new DomainException("لا يمكن تغيير حالة قرار معتمد.");
+        Urgency = CaseUrgency.Suspended;
+        ExpediteRequestNumber = null;
         UpdatedUtc = nowUtc;
     }
 

@@ -163,12 +163,17 @@ the same رقم الأساس; متفرق copies inherit the original's and are e
   (رقم طلب الاستعجال)** is mandatory.
   - **Escalation (BR-13):** a **non-approved** copy may be escalated to **مستعجل** at any time by the
     Registry Head (requires the expedite-request number), which **raises its priority** immediately.
+  - **Suspension escalation:** a **non-approved** copy may also be escalated to **موقوف** at any time
+    by the Registry Head, including copies that are currently **عادي** or **مستعجل**. This is the
+    highest priority tier, does **not** require an expedite-request number, and once a copy is
+    **موقوف** it cannot be downgraded back to **مستعجل** or **عادي** through the escalation flow.
 
 The former "مرجع الحكم" field and the "الإجراء" (procedure) field were removed.
 **Acceptance:** a sequential copy number is generated automatically and atomically for عادي copies;
 the reservation date is server-assigned (not a client input); a **duplicate رقم الأساس for a عادي copy
-in the same court is rejected**; مستعجل without an expedite-request number is rejected; متفرق without a
-(selected) Approved original is rejected and gets a رقم المتفرق but no رقم النسخة.
+in the same court is rejected**; مستعجل without an expedite-request number is rejected; non-approved
+عادي/مستعجل copies may be escalated to موقوف; متفرق without a (selected) Approved original is rejected
+and gets a رقم المتفرق but no رقم النسخة.
 
 ### FR-07 — Copy preparation
 The Copyist must **accept (قبول)** an assigned copy **before** editing it — editing or submitting a
@@ -405,7 +410,7 @@ permanent audit log).
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
 | BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
-| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
+| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. A **non-approved** copy may also be escalated from **عادي** or **مستعجل** to **موقوف** at any time by the Registry Head; موقوف is the highest priority and cannot be downgraded through the escalation flow. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 
 ## 11. Open decisions summary
