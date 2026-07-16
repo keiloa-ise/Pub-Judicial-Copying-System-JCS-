@@ -14,7 +14,7 @@ public sealed record CreateCopyRequestRequest(
 // FR-06: escalate a non-approved copy to مستعجل (Registry Head) — expedite number required.
 public sealed record ExpediteRequest(string ExpediteRequestNumber);
 
-public sealed record SaveDraftRequest(Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string Body);
+public sealed record SaveDraftRequest(Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string RebuttalSectionsJson, string Body);
 
 public sealed record ReturnRequest(string Corrections);
 

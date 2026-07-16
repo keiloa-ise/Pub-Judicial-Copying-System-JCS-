@@ -19,9 +19,12 @@ public interface IJcsQueries
     Task<DeletionTargetsDto> ListDeletionTargetsAsync(
         IReadOnlyCollection<Guid>? courtIds, int year, CancellationToken ct);
 
-    /// <summary>BR-11: Approved عادي copies (within the given courts) selectable as a متفرق's original.</summary>
+    /// <summary>BR-11: Approved عادي copies selectable as a متفرق's original, filtered server-side to
+    /// the chosen <paramref name="roomId"/> (and an optional <paramref name="search"/> over رقم النسخة /
+    /// رقم الأساس), capped at <paramref name="limit"/> rows so the payload stays bounded at any volume.
+    /// Court scope (<paramref name="courtIds"/>) still applies (BR-06).</summary>
     Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(
-        IReadOnlyCollection<Guid>? courtIds, CancellationToken ct);
+        IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct);
 
     /// <summary>FR-17: existing رقم النسخة and رقم المتفرق start-point counters (for the admin screen).</summary>
     Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct);

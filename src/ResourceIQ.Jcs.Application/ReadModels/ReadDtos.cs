@@ -47,10 +47,12 @@ public sealed record CopyRequestDetail(
     string FieldValuesJson,
     string SectionsJson,
     string DissentSectionsJson,
+    string RebuttalSectionsJson,
     string Body,
     DateTimeOffset CreatedUtc,
     DateTimeOffset? ApprovedUtc,
     DateTimeOffset? AcceptedUtc,
+    DateTimeOffset? PrintedUtc,
     Guid? OriginalCopyId,
     string? OriginalCopyNumber,
     IReadOnlyList<LinkedMiscDto> LinkedMisc);
@@ -59,9 +61,15 @@ public sealed record CopyRequestDetail(
 public sealed record LinkedMiscDto(
     Guid Id, int? MiscNumber, string? ReferenceNumber, CopyState State, DateOnly ReservationDate);
 
-/// <summary>BR-11: an Approved عادي copy a Registry Head may base a new متفرق on (the original picker).</summary>
+/// <summary>BR-11: an Approved عادي copy a Registry Head may base a new متفرق on (the original picker).
+/// Carries the room (RoomId/RoomName) so the create form can narrow the picker to the chosen room.</summary>
 public sealed record OriginalCopyOption(
-    Guid Id, string CopyNumber, Guid CourtId, string CourtName, string CaseBaseNumber, DateOnly ReservationDate);
+    Guid Id, string CopyNumber, Guid CourtId, string CourtName, Guid RoomId, string RoomName, string CaseBaseNumber, DateOnly ReservationDate);
+
+/// <summary>Last-issued sequential number for a court/room scope in the current year (FR-03/FR-06):
+/// رقم النسخة for عادي, رقم المتفرق for متفرق. <see cref="Last"/> is null when none has been issued
+/// yet; <see cref="Next"/> is the number the next create will allocate.</summary>
+public sealed record LastNumberDto(int? Last, int Next);
 
 /// <summary>FR-16: the latest عادي copy in a court (court+year). Deletable only when it has no linked
 /// متفرق copies (HasLinkedMisc = false), so deleting it never orphans a متفرق (BR-09).</summary>
@@ -138,7 +146,8 @@ public sealed record CopyRequestFilter(
     string? CopyNumber = null,
     string? CaseBaseNumber = null,
     DateOnly? FromReservation = null,
-    DateOnly? ToReservation = null);
+    DateOnly? ToReservation = null,
+    Guid? RoomId = null);
 
 /// <summary>Advanced-search inputs supplied by the user (narrow within their allowed scope).</summary>
 public sealed record CopyRequestSearch(

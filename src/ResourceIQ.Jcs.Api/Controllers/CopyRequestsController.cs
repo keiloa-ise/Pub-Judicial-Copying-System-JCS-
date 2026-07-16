@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResourceIQ.Jcs.Api.Contracts;
@@ -23,6 +24,8 @@ public sealed class CopyRequestsController(
     DeleteCopyService deleteService,
     AcceptCopyService acceptService,
     ExpediteCopyService expediteService,
+    SuspendCopyService suspendService,
+    PrintCopyService printService,
     PrepareCopyService prepareService,
     SubmitForReviewService submitService,
     ReviewService reviewService,
@@ -69,6 +72,64 @@ public sealed class CopyRequestsController(
         return File(bytes, "application/pdf");
     }
 
+    /// <summary>FR-15: PRINT a copy — enforces the print order (priority + sequence) and the
+    /// once-per-approval rule, records the print (audit + timestamp), then returns the rendered PDF
+    /// for the browser to print. Distinct from <see cref="Pdf"/>, which is a read-only preview.</summary>
+    [HttpPost("{id:guid}/print")]
+    public async Task<IActionResult> Print(Guid id, CancellationToken ct)
+    {
+        await printService.HandleAsync(new PrintCopyCommand(id), ct);
+        var detail = await readService.GetDetailAsync(id, ct);
+        var bytes = pdfService.Render(detail);
+        var name = $"judgment-{(detail.CopyNumber ?? id.ToString()).Replace('/', '-')}.pdf";
+        Response.Headers.ContentDisposition = $"inline; filename=\"{name}\"";
+        return File(bytes, "application/pdf");
+    }
+
+    /// <summary>FR-15 batch print (Administrator): JSON preview — the copies in a court+room whose
+    /// تاريخ الحجز falls in [from, to], مثبتة (approved=true) or مسودة (approved=false) — so the admin
+    /// sees the count/list before downloading.</summary>
+    [HttpGet("batch-print/preview")]
+    public async Task<IActionResult> BatchPrintPreview(
+        [FromQuery] Guid courtId, [FromQuery] Guid roomId, [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to, [FromQuery] bool approved, CancellationToken ct) =>
+        Ok(await readService.ListBatchPrintAsync(courtId, roomId, from, to, approved, ct));
+
+    /// <summary>FR-15 batch print (Administrator): renders EACH matching copy to its OWN PDF and returns
+    /// them bundled in a ZIP (one independent file per decision). Read-only export — never marks printed
+    /// and is not subject to the print order / once-per-approval rules.</summary>
+    [HttpGet("batch-print")]
+    public async Task<IActionResult> BatchPrint(
+        [FromQuery] Guid courtId, [FromQuery] Guid roomId, [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to, [FromQuery] bool approved, CancellationToken ct)
+    {
+        var items = await readService.ListBatchPrintAsync(courtId, roomId, from, to, approved, ct);
+        if (items.Count == 0) return NotFound(new { error = "لا توجد قرارات مطابقة." });
+        if (items.Count > 1000) return BadRequest(new { error = "النطاق كبير جداً — ضيّق المدى الزمني." });
+
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in items)
+            {
+                var detail = await readService.GetDetailAsync(item.Id, ct);
+                var bytes = pdfService.Render(detail);
+                var label = (detail.CopyNumber ?? (detail.MiscNumber is { } m ? $"misc-{m}" : detail.Id.ToString())).Replace('/', '-');
+                var name = $"judgment-{label}.pdf";
+                var n = 1;
+                while (!used.Add(name)) name = $"judgment-{label}-{++n}.pdf"; // keep filenames unique
+                var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
+                await using var es = entry.Open();
+                await es.WriteAsync(bytes, ct);
+            }
+        }
+        ms.Position = 0;
+        var zipName = $"batch-{(approved ? "approved" : "draft")}-{from:yyyyMMdd}-{to:yyyyMMdd}.zip";
+        Response.Headers.ContentDisposition = $"attachment; filename=\"{zipName}\"";
+        return File(ms.ToArray(), "application/zip");
+    }
+
     /// <summary>Append-only audit history for one request (read).</summary>
     [HttpGet("{id:guid}/audit")]
     public async Task<IActionResult> Audit(Guid id, CancellationToken ct) =>
@@ -91,10 +152,18 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> DeletionTargets(CancellationToken ct) =>
         Ok(await readService.ListDeletionTargetsAsync(ct));
 
-    /// <summary>BR-11: Approved عادي copies a Registry Head may base a new متفرق on (the original picker).</summary>
+    /// <summary>BR-11: Approved عادي copies a Registry Head may base a new متفرق on (the original picker),
+    /// filtered server-side to the chosen room (+ optional search) so the payload stays bounded at any scale.</summary>
     [HttpGet("originals")]
-    public async Task<IActionResult> Originals(CancellationToken ct) =>
-        Ok(await readService.ListSelectableOriginalsAsync(ct));
+    public async Task<IActionResult> Originals([FromQuery] Guid roomId, [FromQuery] string? search, CancellationToken ct) =>
+        Ok(await readService.ListSelectableOriginalsAsync(roomId, search, ct));
+
+    /// <summary>FR-03/FR-06: last sequential number issued for a court/room scope this year (+ the next
+    /// number) — رقم النسخة for عادي, رقم المتفرق for متفرق. Shown as the Registry Head builds a request.</summary>
+    [HttpGet("last-number")]
+    public async Task<IActionResult> LastNumber(
+        [FromQuery] Guid courtId, [FromQuery] Guid roomId, [FromQuery] CaseCategory category, CancellationToken ct) =>
+        Ok(await readService.GetLastIssuedNumberAsync(courtId, roomId, category, ct));
 
     /// <summary>FR-16: Registry Head deletes the latest copy in a court regardless of type (hard
     /// delete; رقم النسخة — and رقم المتفرق if متفرق — rolled back so no gap; audit kept).</summary>
@@ -110,7 +179,7 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> SaveDraft(Guid id, SaveDraftRequest body, CancellationToken ct)
     {
         await prepareService.SaveDraftAsync(
-            new SaveDraftCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.DissentSectionsJson, body.Body), ct);
+            new SaveDraftCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.DissentSectionsJson, body.RebuttalSectionsJson, body.Body), ct);
         return NoContent();
     }
 
@@ -127,6 +196,14 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> Expedite(Guid id, ExpediteRequest body, CancellationToken ct)
     {
         await expediteService.HandleAsync(new ExpediteCopyCommand(id, body.ExpediteRequestNumber), ct);
+        return NoContent();
+    }
+
+    /// <summary>FR-06: Registry Head escalates a non-approved copy to موقوف.</summary>
+    [HttpPost("{id:guid}/suspend")]
+    public async Task<IActionResult> Suspend(Guid id, CancellationToken ct)
+    {
+        await suspendService.HandleAsync(new SuspendCopyCommand(id), ct);
         return NoContent();
     }
 
@@ -151,7 +228,7 @@ public sealed class CopyRequestsController(
     public async Task<IActionResult> Correct(Guid id, SaveDraftRequest body, CancellationToken ct)
     {
         await reviewService.CorrectAsync(
-            new CorrectCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.DissentSectionsJson, body.Body), ct);
+            new CorrectCommand(id, body.FormTemplateId, body.FieldValuesJson, body.SectionsJson, body.DissentSectionsJson, body.RebuttalSectionsJson, body.Body), ct);
         return NoContent();
     }
 

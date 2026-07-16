@@ -34,6 +34,13 @@ public interface ICopyRequestRepository
     Task<bool> AnyUnderReviewRankedBeforeAsync(
         IReadOnlyCollection<Guid> courtIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
 
+    /// <summary>FR-15 print ordering: true if any NOT-YET-PRINTED copy in the given courts, in the same
+    /// print queue (<paramref name="isApproved"/> = approved vs draft), ranks BEFORE the given one —
+    /// higher priority tier, or the same tier but older. Printing follows موقوف > مستعجل > عادي then
+    /// oldest-first, with the approved and non-approved queues ordered independently.</summary>
+    Task<bool> AnyUnprintedRankedBeforeAsync(
+        IReadOnlyCollection<Guid> courtIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
+
     /// <summary>Removes the copy request (its CopyContent cascades; audit rows are untouched).</summary>
     void Remove(CopyRequest request);
 }

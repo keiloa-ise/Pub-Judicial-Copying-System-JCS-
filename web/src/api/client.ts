@@ -45,12 +45,16 @@ export interface CopyRequestListItem {
 export interface LinkedMisc { id: string; miscNumber: number | null; referenceNumber: string | null; state: CopyState; reservationDate: string; }
 export interface CopyRequestDetail extends CopyRequestListItem {
   referenceNumber: string | null;
-  formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string; approvedUtc: string | null;
+  formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string; approvedUtc: string | null;
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
+  printedUtc: string | null; // FR-15: set when printed in the current phase; blocks re-print of approved copies.
 }
 // CopyRequestDetail inherits acceptedUtc from CopyRequestListItem.
-/** BR-11: an Approved عادي copy a متفرق can be based on (the original picker). */
-export interface OriginalCopyOption { id: string; copyNumber: string; courtId: string; courtName: string; caseBaseNumber: string; reservationDate: string; }
+/** BR-11: an Approved عادي copy a متفرق can be based on (the original picker). Carries room so the
+ *  create form can narrow the picker to the chosen court+room. */
+export interface OriginalCopyOption { id: string; copyNumber: string; courtId: string; courtName: string; roomId: string; roomName: string; caseBaseNumber: string; reservationDate: string; }
+/** FR-03/FR-06: last sequential number issued for a court/room scope this year, and the next to allocate. */
+export interface LastNumber { last: number | null; next: number; }
 /** A dynamic, editable section of a copy (inserted from a paragraph template). */
 export interface CopySection { title: string; text: string; }
 export interface AuditEntry {
@@ -89,7 +93,7 @@ export interface Judge { id: string; name: string; isActive: boolean; roomIds: s
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
 /** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim). */
-export interface PanelMember { judge: string; title: string; dissenting?: boolean; delegated?: boolean; }
+export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; }
 export interface ParagraphTemplate { id: string; title: string; body: string; isArchived: boolean; formTemplateId: string | null; }
 export interface FormField { id: string; key: string; label: string; type: string; validationRulesJson: string | null; order: number; }
 export interface FormTemplate { id: string; name: string; isActive: boolean; fields: FormField[]; }
@@ -154,30 +158,64 @@ export const api = {
   },
   getRequest: (id: string) => request<CopyRequestDetail>(`/api/copy-requests/${id}`),
   getAudit: (id: string) => request<AuditEntry[]>(`/api/copy-requests/${id}/audit`),
+  // FR-15 batch print (Administrator): preview the matching copies (court+room+date range+kind).
+  batchPrintPreview: (courtId: string, roomId: string, from: string, to: string, approved: boolean) =>
+    request<CopyRequestListItem[]>(
+      `/api/copy-requests/batch-print/preview?courtId=${courtId}&roomId=${roomId}&from=${from}&to=${to}&approved=${approved}`),
+  // FR-15 batch print: download a ZIP with one independent PDF per matching decision.
+  batchPrintZip: async (courtId: string, roomId: string, from: string, to: string, approved: boolean): Promise<Blob> => {
+    const res = await fetch(
+      `${BASE}/api/copy-requests/batch-print?courtId=${courtId}&roomId=${roomId}&from=${from}&to=${to}&approved=${approved}`,
+      { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error ?? `Request failed (${res.status})`);
+    }
+    return res.blob();
+  },
   // FR-15: direct same-origin URL of the server-rendered judgment PDF. Loaded straight into an
   // <iframe> (browser's native PDF viewer) — far more reliable than blob URLs. Authorized by the
   // HttpOnly "jcs_pdf" cookie set at login (the iframe can't send an Authorization header).
   pdfUrl: (id: string) => `${BASE}/api/copy-requests/${id}/pdf`,
+  // FR-15: PRINT (not preview) — enforces print order + once-per-approval, records the print, and
+  // returns the PDF bytes to send to the printer. Throws (with the server's Arabic reason) if blocked.
+  printPdf: async (id: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/api/copy-requests/${id}/print`, {
+      method: "POST", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error ?? `Request failed (${res.status})`);
+    }
+    return res.blob();
+  },
   createRequest: (body: {
     courtId: string; roomId: string; caseFilingDate: string | null; caseBaseNumber: string;
     category: CaseCategory; urgency: CaseUrgency; expediteRequestNumber: string | null;
     referenceNumber: string | null; assignedCopyistId: string; originalCopyId: string | null;
   }) => request<{ id: string; copyNumber: string; state: string }>(
     "/api/copy-requests", { method: "POST", body: JSON.stringify(body) }),
-  // FR-07: copyist accepts the copy before editing. FR-06: head escalates a non-approved copy to مستعجل.
+  // FR-07: copyist accepts the copy before editing. FR-06: head escalates a non-approved copy.
   accept: (id: string) => request<void>(`/api/copy-requests/${id}/accept`, { method: "POST" }),
   expedite: (id: string, expediteRequestNumber: string) =>
     request<void>(`/api/copy-requests/${id}/expedite`, { method: "POST", body: JSON.stringify({ expediteRequestNumber }) }),
+  suspend: (id: string) => request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST" }),
   // BR-11: Approved عادي copies a متفرق can be based on.
-  originals: () => request<OriginalCopyOption[]>("/api/copy-requests/originals"),
+  // BR-11: Approved originals for the متفرق picker — filtered server-side to a room (+ optional search),
+  // capped server-side, so the payload stays small no matter how many approved copies exist.
+  originals: (roomId: string, search: string) =>
+    request<OriginalCopyOption[]>(`/api/copy-requests/originals?roomId=${roomId}&search=${encodeURIComponent(search)}`),
+  // FR-03/FR-06: last issued sequential number for a court/room scope (عادي → رقم النسخة, متفرق → رقم المتفرق).
+  lastNumber: (courtId: string, roomId: string, category: CaseCategory) =>
+    request<LastNumber>(`/api/copy-requests/last-number?courtId=${courtId}&roomId=${roomId}&category=${category}`),
   // FR-16: deletion window — latest عادي per court + last متفرق per scope; delete by copy id.
   deletionTargets: () => request<DeletionTargets>("/api/copy-requests/deletion-targets"),
   deleteRequest: (id: string) => request<void>(`/api/copy-requests/${id}`, { method: "DELETE" }),
-  saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string }) =>
+  saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/content`, { method: "PUT", body: JSON.stringify(body) }),
   submit: (id: string) => request<void>(`/api/copy-requests/${id}/submit`, { method: "POST" }),
   // FR-10: Reviewer corrects the copy in place (same body shape as saveDraft); stays under review.
-  correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; body: string }) =>
+  correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/correct`, { method: "PUT", body: JSON.stringify(body) }),
   approve: (id: string) => request<void>(`/api/copy-requests/${id}/approve`, { method: "POST" }),
   returnForCorrection: (id: string, corrections: string) =>

@@ -45,6 +45,7 @@ public sealed class JudgmentPdfService
         var members = ParsePanelMembers(G("members"));
         var sections = ParseSections(d.SectionsJson);
         var dissentSections = ParseSections(d.DissentSectionsJson);
+        var rebuttalSections = ParseSections(d.RebuttalSectionsJson);
 
         // رقم النسخة is {court}/{year}/{seq} or {court}/{room}/{year}/{seq}: court is first, year is
         // second-to-last, seq is last. Handles both the court-level and room-level formats (FR-03).
@@ -75,7 +76,7 @@ public sealed class JudgmentPdfService
                 page.Background().Element(bg => Background(bg, draft));
 
                 page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year, draft));
-                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections));
+                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections, rebuttalSections));
             });
         }).GeneratePdf();
     }
@@ -121,9 +122,10 @@ public sealed class JudgmentPdfService
 
     // ── Body ──
     private static void Body(IContainer c, CopyRequestDetail d, Func<string, string> G,
-        IReadOnlyList<(string Name, string Title, bool Dissenting)> members,
+        IReadOnlyList<(string Name, string Title, bool Dissenting, bool Replying)> members,
         IReadOnlyList<(string Title, string Text)> sections,
-        IReadOnlyList<(string Title, string Text)> dissentSections)
+        IReadOnlyList<(string Title, string Text)> dissentSections,
+        IReadOnlyList<(string Title, string Text)> rebuttalSections)
     {
         c.PaddingTop(12).Column(col =>
         {
@@ -220,6 +222,34 @@ public sealed class JudgmentPdfService
                         r.RelativeItem().Element(e => Signature(e, string.IsNullOrWhiteSpace(dj.Title) ? "القاضي المخالف" : dj.Title, dj.Name));
                 });
             }
+
+            // ── Reply-to-dissent appendix (الرد على الرأي المخالف) — the majority's response to the
+            // dissent, printed on a NEW page AFTER the dissent appendix. Only when a dissent exists
+            // AND one or more judges are flagged as replying (presidentReplying + members[].Replying).
+            // A replying judge is never also a dissenting judge (enforced on the save side). Signed by
+            // the replying judges ONLY; the reason text comes from RebuttalSectionsJson.
+            var repliers = new List<(string Name, string Title)>();
+            if (string.Equals(G("presidentReplying"), "true", StringComparison.OrdinalIgnoreCase))
+                repliers.Add((G("president"), G("presidentTitle")));
+            foreach (var m in members)
+                if (m.Replying) repliers.Add((m.Name, m.Title));
+
+            if (dissenters.Count > 0 && repliers.Count > 0)
+            {
+                col.Item().PageBreak();
+                col.Item().PaddingBottom(6).AlignCenter().Text("الرد على الرأي المخالف").Bold().FontSize(15);
+                foreach (var s in rebuttalSections)
+                    col.Item().Column(sec =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(s.Title)) sec.Item().Text($"{s.Title}:").Bold();
+                        sec.Item().PaddingTop(4).Text(t => RenderRich(t, s.Text, 1.9f));
+                    });
+                col.Item().PaddingTop(40).Row(r =>
+                {
+                    foreach (var rj in repliers)
+                        r.RelativeItem().Element(e => Signature(e, string.IsNullOrWhiteSpace(rj.Title) ? "القاضي" : rj.Title, rj.Name));
+                });
+            }
         });
     }
 
@@ -274,9 +304,9 @@ public sealed class JudgmentPdfService
 
     // Panel members: new shape is an array of { judge, title } objects; legacy copies stored a
     // plain array of judge-name strings (rendered with the default "مستشاراً" title downstream).
-    private static List<(string Name, string Title, bool Dissenting)> ParsePanelMembers(string json)
+    private static List<(string Name, string Title, bool Dissenting, bool Replying)> ParsePanelMembers(string json)
     {
-        var list = new List<(string, string, bool)>();
+        var list = new List<(string, string, bool, bool)>();
         if (string.IsNullOrWhiteSpace(json)) return list;
         try
         {
@@ -287,7 +317,7 @@ public sealed class JudgmentPdfService
                     if (e.ValueKind == JsonValueKind.String)
                     {
                         var s = e.GetString();
-                        if (!string.IsNullOrWhiteSpace(s)) list.Add((s!.Trim(), "", false));
+                        if (!string.IsNullOrWhiteSpace(s)) list.Add((s!.Trim(), "", false, false));
                     }
                     else if (e.ValueKind == JsonValueKind.Object)
                     {
@@ -295,7 +325,8 @@ public sealed class JudgmentPdfService
                         if (name.Length == 0) name = Str(e, "name");
                         var title = Str(e, "title");
                         var dissenting = e.TryGetProperty("dissenting", out var dv) && dv.ValueKind == JsonValueKind.True;
-                        if (name.Length > 0) list.Add((name, title, dissenting));
+                        var replying = e.TryGetProperty("replying", out var rv) && rv.ValueKind == JsonValueKind.True;
+                        if (name.Length > 0) list.Add((name, title, dissenting, replying));
                     }
                 }
         }

@@ -92,6 +92,10 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
     public Task<bool> AnyUnderReviewRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.State == CopyState.UnderReview
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
+    public Task<bool> AnyUnprintedRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, bool isApproved, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.PrintedUtc == null
+            && (x.State == CopyState.Approved) == isApproved
+            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
     public void Remove(CopyRequest request) => _store.Remove(request.Id);
     public bool Contains(Guid id) => _store.ContainsKey(id);
 }
@@ -107,7 +111,7 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<Guid?> GetLatestCopyRequestIdAsync(IReadOnlyCollection<Guid>? courtIds, CancellationToken ct) => Task.FromResult(LatestId);
     public Task<DeletionTargetsDto> ListDeletionTargetsAsync(IReadOnlyCollection<Guid>? courtIds, int year, CancellationToken ct)
         => Task.FromResult(new DeletionTargetsDto([], []));
-    public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(IReadOnlyCollection<Guid>? courtIds, CancellationToken ct)
+    public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<OriginalCopyOption>>([]);
     public Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CopyNumberCounterDto>>([]);

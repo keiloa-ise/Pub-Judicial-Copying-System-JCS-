@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ResourceIQ.Jcs.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using ResourceIQ.Jcs.Infrastructure.Persistence;
 namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JcsDbContext))]
-    partial class JcsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714062949_OriginalPickerIndex")]
+    partial class OriginalPickerIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -166,12 +169,6 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("OriginalCopyId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("PrintedById")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset?>("PrintedUtc")
-                        .HasColumnType("datetimeoffset");
-
                     b.Property<string>("ReferenceNumber")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -217,11 +214,6 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                         .HasFilter("[Category] = 1 AND [State] = 4");
 
                     SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CourtId", "RoomId"), new[] { "CopyNumber", "CaseBaseNumber", "ReservationDate" });
-
-                    b.HasIndex("CourtId", "State")
-                        .HasFilter("[PrintedUtc] IS NULL");
-
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CourtId", "State"), new[] { "Urgency", "CreatedUtc" });
 
                     b.ToTable("CopyRequests");
                 });

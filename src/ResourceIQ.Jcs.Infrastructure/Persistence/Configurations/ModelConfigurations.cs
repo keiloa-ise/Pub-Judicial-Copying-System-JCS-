@@ -121,6 +121,19 @@ public sealed class CopyRequestConfiguration : IEntityTypeConfiguration<CopyRequ
         // رقم الأساس, so they are excluded via a filtered index ([Category] = 1 is Normal).
         b.HasIndex(x => new { x.CourtId, x.CaseBaseNumber }).IsUnique().HasFilter("[Category] = 1");
 
+        // BR-11 متفرق original-picker: seek the chosen room's Approved عادي copies only (never a scan
+        // over all copies). Filtered to Category=Normal(1) AND State=Approved(4); covers the columns
+        // the picker returns so it can be served entirely from the index at any table size (500k+).
+        b.HasIndex(x => new { x.CourtId, x.RoomId })
+            .HasFilter("[Category] = 1 AND [State] = 4")
+            .IncludeProperties(x => new { x.CopyNumber, x.CaseBaseNumber, x.ReservationDate });
+
+        // FR-15 print ordering: "any higher-ranked UNPRINTED copy in this court" — filtered to the small
+        // set of not-yet-printed rows, covering the rank columns so the check is served from the index.
+        b.HasIndex(x => new { x.CourtId, x.State })
+            .HasFilter("[PrintedUtc] IS NULL")
+            .IncludeProperties(x => new { x.Urgency, x.CreatedUtc });
+
         b.HasOne(x => x.Content).WithOne(c => c.CopyRequest!)
             .HasForeignKey<CopyContent>(c => c.CopyRequestId);
 
@@ -142,6 +155,7 @@ public sealed class CopyContentConfiguration : IEntityTypeConfiguration<CopyCont
         b.Property(x => x.FieldValuesJson).IsRequired();
         b.Property(x => x.SectionsJson).IsRequired();        // nvarchar(max) — JSON array of sections
         b.Property(x => x.DissentSectionsJson).IsRequired().HasDefaultValue("[]"); // dissent appendix; default backfills existing rows
+        b.Property(x => x.RebuttalSectionsJson).IsRequired().HasDefaultValue("[]"); // reply-to-dissent appendix; default backfills existing rows
         b.Property(x => x.Body);                              // nvarchar(max) — legacy body
         b.HasOne(x => x.FormTemplate).WithMany().HasForeignKey(x => x.FormTemplateId);
     }

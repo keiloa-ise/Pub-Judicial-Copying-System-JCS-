@@ -150,6 +150,132 @@ public class WorkflowServiceTests
             svc.HandleAsync(new UnlockCommand(Guid.NewGuid(), "reason"), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task RegistryHead_can_escalate_non_approved_copy_to_suspended()
+    {
+        var court = Guid.NewGuid();
+        var req = SeedNormal(court);
+        req.AssignToCopyist(Guid.NewGuid(), Now);
+        Assert.Equal(CaseUrgency.Normal, req.Urgency);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new SuspendCopyService(head, _repo, _clock, _audit, _uow);
+
+        await svc.HandleAsync(new SuspendCopyCommand(req.Id), CancellationToken.None);
+
+        Assert.Equal(CaseUrgency.Suspended, req.Urgency);
+        Assert.Contains(AuditAction.Suspend, _audit.Actions);
+    }
+
+    [Fact]
+    public async Task Cannot_escalate_approved_copy_to_suspended()
+    {
+        var court = Guid.NewGuid();
+        var req = SeedApproved(court, CaseUrgency.Normal);
+        Assert.Equal(CaseUrgency.Normal, req.Urgency);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new SuspendCopyService(head, _repo, _clock, _audit, _uow);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.HandleAsync(new SuspendCopyCommand(req.Id), CancellationToken.None));
+
+        Assert.Equal(CaseUrgency.Normal, req.Urgency);
+        Assert.DoesNotContain(AuditAction.Suspend, _audit.Actions);
+    }
+
+    // ── Print policy (FR-15) ────────────────────────────────────────────────
+    [Fact]
+    public async Task Print_must_follow_priority_and_sequence() // FR-15 R1
+    {
+        var court = Guid.NewGuid();
+        var expedited = SeedApproved(court, CaseUrgency.Expedited); // higher priority, unprinted
+        var normal = SeedApproved(court, CaseUrgency.Normal);       // lower priority
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new PrintCopyService(head, _repo, _clock, _audit, _uow);
+
+        // Printing the عادي while the مستعجل is still unprinted is rejected.
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.HandleAsync(new PrintCopyCommand(normal.Id), CancellationToken.None));
+
+        // Print the higher-priority one first, then the عادي is allowed.
+        await svc.HandleAsync(new PrintCopyCommand(expedited.Id), CancellationToken.None);
+        await svc.HandleAsync(new PrintCopyCommand(normal.Id), CancellationToken.None);
+        Assert.NotNull(expedited.PrintedUtc);
+        Assert.NotNull(normal.PrintedUtc);
+        Assert.Equal(2, _audit.Actions.Count(a => a == AuditAction.Print));
+    }
+
+    [Fact]
+    public async Task Approved_copy_can_be_reprinted_via_service() // FR-15 (revised): reprint allowed anytime
+    {
+        var court = Guid.NewGuid();
+        var req = SeedApproved(court, CaseUrgency.Normal);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new PrintCopyService(head, _repo, _clock, _audit, _uow);
+
+        await svc.HandleAsync(new PrintCopyCommand(req.Id), CancellationToken.None); // first print
+        Assert.NotNull(req.PrintedUtc);
+        await svc.HandleAsync(new PrintCopyCommand(req.Id), CancellationToken.None); // re-print — allowed
+        Assert.Equal(2, _audit.Actions.Count(a => a == AuditAction.Print));
+    }
+
+    [Fact]
+    public async Task Batch_print_is_administrator_only() // FR-15
+    {
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        var svc = new CopyRequestReadService(reviewer, new FakeQueries(), _clock, new FakeAllocator(), new FakeMiscAllocator());
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListBatchPrintAsync(
+            Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), true, CancellationToken.None));
+    }
+
+    // ── Last-issued number (FR-03 / FR-06) ──────────────────────────────────
+    [Fact]
+    public async Task Last_issued_number_returns_last_and_next_per_category()
+    {
+        var court = Guid.NewGuid();
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        // عادي reads the رقم النسخة allocator (41 → next 42); متفرق reads the رقم المتفرق one (7 → next 8).
+        var svc = new CopyRequestReadService(head, new FakeQueries(), _clock,
+            new FakeAllocator { Last = 41 }, new FakeMiscAllocator { Last = 7 });
+
+        var normal = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None);
+        Assert.Equal(41, normal.Last);
+        Assert.Equal(42, normal.Next);
+
+        var misc = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Miscellaneous, CancellationToken.None);
+        Assert.Equal(7, misc.Last);
+        Assert.Equal(8, misc.Next);
+    }
+
+    [Fact]
+    public async Task Last_issued_number_empty_scope_starts_next_at_one()
+    {
+        var court = Guid.NewGuid();
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = new CopyRequestReadService(head, new FakeQueries(), _clock,
+            new FakeAllocator { Last = null }, new FakeMiscAllocator { Last = null });
+
+        var r = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None);
+        Assert.Null(r.Last);
+        Assert.Equal(1, r.Next);
+    }
+
+    [Fact]
+    public async Task Last_issued_number_is_court_scoped() // BR-06
+    {
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(Guid.NewGuid()); // assigned to a DIFFERENT court
+        var svc = new CopyRequestReadService(head, new FakeQueries(), _clock, new FakeAllocator(), new FakeMiscAllocator());
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            svc.GetLastIssuedNumberAsync(Guid.NewGuid(), Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None));
+    }
+
     // ── Deletion (FR-16, BR-09/BR-11) ───────────────────────────────────────
     // متفرق: NO رقم النسخة; carries رقم المتفرق = misc and links to an original (BR-11).
     private CopyRequest SeedMisc(Guid court, int misc = 3, Guid? originalId = null)
@@ -276,9 +402,10 @@ public class WorkflowServiceTests
             svc.DeleteAsync(new DeleteCopyRequestCommand(req.Id), CancellationToken.None));
     }
 
-    private CopyRequest SeedUnderReview(Guid court)
+    private CopyRequest SeedUnderReview(Guid court, CaseUrgency urgency = CaseUrgency.Normal)
     {
-        var r = CopyRequest.Create(court, Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Suspended, null, null, null, Guid.NewGuid(), Now);
+        var expediteRequestNumber = urgency == CaseUrgency.Expedited ? "EXP-1" : null;
+        var r = CopyRequest.Create(court, Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, urgency, expediteRequestNumber, null, null, Guid.NewGuid(), Now);
         r.AssignNumber("00000001");
         var copyist = Guid.NewGuid();
         r.AssignToCopyist(copyist, Now);
@@ -301,9 +428,9 @@ public class WorkflowServiceTests
         return r;
     }
 
-    private CopyRequest SeedApproved(Guid court)
+    private CopyRequest SeedApproved(Guid court, CaseUrgency urgency = CaseUrgency.Normal)
     {
-        var r = SeedUnderReview(court);
+        var r = SeedUnderReview(court, urgency);
         r.Approve(Guid.NewGuid(), Now);
         return r;
     }

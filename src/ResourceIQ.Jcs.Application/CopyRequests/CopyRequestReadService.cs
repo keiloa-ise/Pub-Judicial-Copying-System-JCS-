@@ -10,7 +10,12 @@ namespace ResourceIQ.Jcs.Application.CopyRequests;
 /// Read access to copy requests, scoped by the caller's role and court assignments (BR-06).
 /// Controllers never pass scope; it is derived here so a user can only ever see their own slice.
 /// </summary>
-public sealed class CopyRequestReadService(ICurrentUser currentUser, IJcsQueries queries, IClock clock)
+public sealed class CopyRequestReadService(
+    ICurrentUser currentUser,
+    IJcsQueries queries,
+    IClock clock,
+    ICopyNumberAllocator copyAllocator,
+    IMiscNumberAllocator miscAllocator)
 {
     public Task<IReadOnlyList<CopyRequestListItem>> ListForCurrentUserAsync(
         CopyRequestSearch search, CancellationToken ct)
@@ -76,11 +81,48 @@ public sealed class CopyRequestReadService(ICurrentUser currentUser, IJcsQueries
         return queries.ListDeletionTargetsAsync(currentUser.CourtIds, clock.UtcNow.Year, ct);
     }
 
-    /// <summary>BR-11: Approved عادي copies the Registry Head may base a new متفرق on (their courts).</summary>
-    public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(CancellationToken ct)
+    /// <summary>Max originals returned per picker query — the list is filtered by room + search, so this
+    /// cap keeps the payload bounded regardless of how many approved copies exist (500k+ safe).</summary>
+    private const int OriginalsPageSize = 50;
+
+    /// <summary>BR-11: Approved عادي copies the Registry Head may base a new متفرق on, filtered
+    /// server-side to <paramref name="roomId"/> (+ optional <paramref name="search"/>). Court-scoped.</summary>
+    public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(
+        Guid roomId, string? search, CancellationToken ct)
     {
         Guard.RequireRole(currentUser, Role.RegistryHead);
-        return queries.ListSelectableOriginalsAsync(currentUser.CourtIds, ct);
+        return queries.ListSelectableOriginalsAsync(currentUser.CourtIds, roomId, search, OriginalsPageSize, ct);
+    }
+
+    /// <summary>FR-15 batch print (Administrator only): the copies in a court+room whose تاريخ الحجز
+    /// falls within [from, to], of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state).
+    /// A read-only administrative export: NOT subject to the single-print order/once rules and it never
+    /// marks copies as printed. Ordering follows the same priority as the work queue.</summary>
+    public Task<IReadOnlyList<CopyRequestListItem>> ListBatchPrintAsync(
+        Guid courtId, Guid roomId, DateOnly from, DateOnly to, bool approved, CancellationToken ct)
+    {
+        Guard.RequireRole(currentUser, Role.Administrator);
+        IReadOnlyCollection<CopyState> states = approved
+            ? [CopyState.Approved]
+            : [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];
+        var filter = new CopyRequestFilter(
+            States: states, CourtIds: [courtId], RoomId: roomId, FromReservation: from, ToReservation: to);
+        return queries.ListCopyRequestsAsync(filter, ct);
+    }
+
+    /// <summary>FR-03/FR-06: the last sequential number issued for a court/room scope in the current
+    /// year — رقم النسخة for عادي, رقم المتفرق for متفرق — plus the number the next create will get.
+    /// Lets the Registry Head see the running number before adding a decision. Court-scoped (BR-06).</summary>
+    public async Task<LastNumberDto> GetLastIssuedNumberAsync(
+        Guid courtId, Guid roomId, CaseCategory category, CancellationToken ct)
+    {
+        Guard.RequireRole(currentUser, Role.RegistryHead);
+        EnsureCanView(courtId); // BR-06: only within the head's assigned courts
+        var year = clock.UtcNow.Year; // تاريخ الحجز is server-assigned = today, so numbering is the current year
+        var last = category == CaseCategory.Miscellaneous
+            ? await miscAllocator.PeekLastAsync(courtId, roomId, year, ct)
+            : await copyAllocator.PeekLastAsync(courtId, roomId, year, ct);
+        return new LastNumberDto(last, (last ?? 0) + 1);
     }
 
     public async Task<IReadOnlyList<AuditEntryDto>> GetAuditAsync(Guid id, CancellationToken ct)

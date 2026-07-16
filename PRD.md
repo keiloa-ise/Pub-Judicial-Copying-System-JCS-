@@ -163,12 +163,17 @@ the same رقم الأساس; متفرق copies inherit the original's and are e
   (رقم طلب الاستعجال)** is mandatory.
   - **Escalation (BR-13):** a **non-approved** copy may be escalated to **مستعجل** at any time by the
     Registry Head (requires the expedite-request number), which **raises its priority** immediately.
+  - **Suspension escalation:** a **non-approved** copy may also be escalated to **موقوف** at any time
+    by the Registry Head, including copies that are currently **عادي** or **مستعجل**. This is the
+    highest priority tier, does **not** require an expedite-request number, and once a copy is
+    **موقوف** it cannot be downgraded back to **مستعجل** or **عادي** through the escalation flow.
 
 The former "مرجع الحكم" field and the "الإجراء" (procedure) field were removed.
 **Acceptance:** a sequential copy number is generated automatically and atomically for عادي copies;
 the reservation date is server-assigned (not a client input); a **duplicate رقم الأساس for a عادي copy
-in the same court is rejected**; مستعجل without an expedite-request number is rejected; متفرق without a
-(selected) Approved original is rejected and gets a رقم المتفرق but no رقم النسخة.
+in the same court is rejected**; مستعجل without an expedite-request number is rejected; non-approved
+عادي/مستعجل copies may be escalated to موقوف; متفرق without a (selected) Approved original is rejected
+and gets a رقم المتفرق but no رقم النسخة.
 
 ### FR-07 — Copy preparation
 The Copyist must **accept (قبول)** an assigned copy **before** editing it — editing or submitting a
@@ -189,6 +194,8 @@ requests, completes form fields, adds legal paragraphs, and saves drafts.
   copy's own sequential number (رقم النسخة) and shown read-only.
 - **Dissent (مخالفة القضاة):** the Copyist may mark one or more panel judges — including the room
   president — as **dissenting (مخالف)** and author a dissent appendix stating the reason; see **FR-19**.
+- **Reply to dissent (الرد على المخالفة):** when a dissent exists, the Copyist may mark one or more of
+  the **non-dissenting** judges as authoring a **reply (رد)** and write a reply appendix; see **FR-20**.
 
 ### FR-08 — Dynamic forms
 Administrator can create form templates, define fields, and define validation rules.
@@ -252,6 +259,9 @@ The copy can be printed as the official "إعلام الحكم" document.
   note that a dissenting opinion exists, naming the dissenting judges; and a **dissent appendix** is
   printed on a **new page** after the decision (reason sections + signatures of the dissenting judges
   only).
+- If one or more judges **reply to the dissent (FR-20)**, a **reply appendix** («الرد على الرأي
+  المخالف») is printed on a **new page after the dissent appendix** — reason sections + signatures of
+  the replying judges only.
 
 ### FR-16 — Delete a last decision (Registry Head)
 Deletion is performed only through a dedicated **deletion-operations window** (no per-copy delete
@@ -339,6 +349,25 @@ the dissenting judges.
   and locked** (non-editable). Stored as `members[].delegated` / `presidentDelegated` in the panel field
   values; the printed capacity is «ندباً». Backward-compatible — existing copies carry no delegation.
 
+### FR-20 — Reply to dissent (الرد على المخالفة)
+When a decision carries a dissenting opinion (FR-19), the panel may respond with a **reply (الرد على
+الرأي المخالف)**: one or more of the **non-dissenting** judges — including the room president — author a
+reply stating the majority's position, signed by the replying judges.
+**Acceptance:**
+- The reply is available **only when at least one judge dissents**. A **«رد» checkbox** appears next to
+  each judge (president and every member); it is **enabled only for a non-dissenting judge** while a
+  dissent exists. A judge can never be **both dissenting and replying** (the two checkboxes are mutually
+  exclusive — ticking one clears the other).
+- When at least one judge replies, a **reply-appendix editor** appears, authored with the **same
+  paragraph/template style** as the main body.
+- **Finalize is blocked** (submit for review / approve) if a reply is marked with no reply text.
+- The printed «إعلام الحكم» adds a **reply appendix on a new page after the dissent appendix**: the reply
+  sections followed by the **signatures of the replying judges only**.
+- Which judges reply is stored inside the copy's panel field values (`members[].replying` +
+  `presidentReplying`); the reply text is a separate content column (`RebuttalSectionsJson`). When no
+  dissent exists the reply flags are cleared on save. Both are **backward-compatible** — existing copies
+  carry no reply.
+
 ## 8. Non-functional requirements
 
 ### Security
@@ -381,7 +410,7 @@ permanent audit log).
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
 | BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
-| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. |
+| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. A **non-approved** copy may also be escalated from **عادي** or **مستعجل** to **موقوف** at any time by the Registry Head; موقوف is the highest priority and cannot be downgraded through the escalation flow. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 
 ## 11. Open decisions summary
