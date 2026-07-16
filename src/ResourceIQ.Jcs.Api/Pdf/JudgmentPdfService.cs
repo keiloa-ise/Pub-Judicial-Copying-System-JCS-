@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using ClosedXML;
 using QRCoder;
 using QuestPDF.Drawing;
 using QuestPDF.Fluent;
@@ -73,14 +74,14 @@ public sealed class JudgmentPdfService
 
                 page.Background().Element(bg => Background(bg, draft));
 
-                page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year));
+                page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year, draft));
                 page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections));
             });
         }).GeneratePdf();
     }
 
     // ── Header (repeats on every printed page) ──
-    private static void Header(IContainer c, CopyRequestDetail d, byte[] qr, Func<string, string> G, string year)
+    private static void Header(IContainer c, CopyRequestDetail d, byte[] qr, Func<string, string> G, string year, bool draft)
     {
         c.Column(col =>
         {
@@ -88,7 +89,11 @@ public sealed class JudgmentPdfService
             {
                 row.ConstantItem(96).Column(q =>
                 {
-                    q.Item().Width(84).Image(qr);
+                    if (!draft)
+                    {
+                        q.Item().Width(84).Image(qr);
+                    }
+                    
                     q.Item().AlignCenter().Text(d.CopyNumber ?? (d.MiscNumber is { } mm ? $"متفرق {mm}" : "—")).FontSize(8);
                 });
                 row.RelativeItem().AlignMiddle().Column(t =>
@@ -237,22 +242,19 @@ public sealed class JudgmentPdfService
     private static void Background(IContainer c, bool draft) =>
         c.Layers(layers =>
         {
-            layers.PrimaryLayer().AlignCenter().AlignMiddle().Width(115, Unit.Millimetre).Image(LogoFaint);
-            if (draft) layers.Layer().Element(DraftWatermark);
+            layers.PrimaryLayer().AlignCenter().AlignMiddle();
+            if (!draft) 
+                layers.Layer().AlignCenter().AlignMiddle().Width(115, Unit.Millimetre).Image(LogoFaint);
+
+            if (draft) 
+                layers.Layer().Element(DraftWatermark);
         });
 
     private static void DraftWatermark(IContainer c) =>
         c.AlignMiddle().Column(col =>
         {
             col.Spacing(46);
-            for (var i = 0; i < 7; i++)
-                col.Item()
-                    .TranslateX(-50)     // تحريك أفقي
-                    .TranslateY(-50)     // تحريك عمودي
-                    .Rotate(-30)         // تدوير 30 درجة
-                    .Text("مسودة قرار        مسودة قرار        مسودة قرار")
-                    .FontFamily(Font).FontSize(26).Bold()
-                    .FontColor("#73FF0000");   // شفافية ~45% عبر قناة ألفا (QuestPDF لا يوفّر .Opacity)
+            col.Item().OffsetX(100).OffsetY(50).Rotate(-30).Text("غير مثبت").FontFamily(Font).FontSize(100).Bold().FontColor("#b7aeae");
         });
 
     // ── Parsing helpers ──
