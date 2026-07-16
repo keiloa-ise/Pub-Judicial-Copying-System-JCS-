@@ -50,19 +50,18 @@ public sealed class JudgmentPdfService
         // رقم النسخة is {court}/{year}/{seq} or {court}/{room}/{year}/{seq}: court is first, year is
         // second-to-last, seq is last. Handles both the court-level and room-level formats (FR-03).
         var parts = (d.CopyNumber ?? "").Split('/');
-        var courtCode = parts.Length >= 3 ? parts[0] : "";
         var year = parts.Length >= 3 ? parts[^2] : G("year");
         var draft = d.State != CopyState.Approved;
 
-        var qrLines = new List<string>();
-        if (d.MiscNumber is { } ms)
+        // QR payload carries only رقم القرار / تاريخ القرار / المحكمة / الغرفة — never the copy or
+        // متفرق numbering, which stays visible in print but out of the QR.
+        var qrLines = new List<string>
         {
-            qrLines.Add($"رقم المتفرق: {ms}");
-            if (!string.IsNullOrWhiteSpace(d.OriginalCopyNumber)) qrLines.Add($"مستند إلى النسخة: {d.OriginalCopyNumber}");
-        }
-        else qrLines.Add($"رقم النسخة: {d.CopyNumber ?? "—"}");
-        qrLines.Add($"المحكمة: {d.CourtName}{(courtCode.Length > 0 ? $" ({courtCode})" : "")}");
-        qrLines.Add($"السنة: {(year.Length > 0 ? year : "—")}");
+            $"رقم القرار: {Dash(G("decisionNumber"))}",
+            $"تاريخ القرار: {DecisionDate(G("issueHijri"), G("issueGregorian"))}",
+            $"المحكمة: {Dash(d.CourtName)}",
+            $"الغرفة: {Dash(d.RoomName)}",
+        };
         var qr = QrPng(string.Join("\n", qrLines));
 
         return Document.Create(doc =>
@@ -94,7 +93,7 @@ public sealed class JudgmentPdfService
                     {
                         q.Item().Width(84).Image(qr);
                     }
-                    
+
                     q.Item().AlignCenter().Text(d.CopyNumber ?? (d.MiscNumber is { } mm ? $"متفرق {mm}" : "—")).FontSize(8);
                 });
                 row.RelativeItem().AlignMiddle().Column(t =>
@@ -273,18 +272,31 @@ public sealed class JudgmentPdfService
         c.Layers(layers =>
         {
             layers.PrimaryLayer().AlignCenter().AlignMiddle();
-            if (!draft) 
+            if (!draft)
                 layers.Layer().AlignCenter().AlignMiddle().Width(115, Unit.Millimetre).Image(LogoFaint);
 
-            if (draft) 
+            if (draft)
                 layers.Layer().Element(DraftWatermark);
         });
 
+    // Even grid of the stamp across the full page, rotated, at low alpha — clearly visible while
+    // staying behind, and never competing with, the document text.
+    private const int WatermarkColumns = 3;
+    private const int WatermarkRows = 5;
+
     private static void DraftWatermark(IContainer c) =>
-        c.AlignMiddle().Column(col =>
+        c.Column(col =>
         {
-            col.Spacing(46);
-            col.Item().OffsetX(100).OffsetY(50).Rotate(-30).Text("غير مثبت").FontFamily(Font).FontSize(100).Bold().FontColor("#b7aeae");
+            for (var row = 0; row < WatermarkRows; row++)
+                col.Item().Height(297f / WatermarkRows, Unit.Millimetre).Row(r =>
+                {
+                    for (var i = 0; i < WatermarkColumns; i++)
+                        r.RelativeItem().AlignCenter().AlignMiddle()
+                            .Rotate(-35)
+                            .Text("مسودة قرار")
+                            .FontFamily(Font).FontSize(24).Bold()
+                            .FontColor("#33FF0000"); // ~20% alpha via the ARGB channel (QuestPDF has no .Opacity())
+                });
         });
 
     // ── Parsing helpers ──
@@ -424,6 +436,18 @@ public sealed class JudgmentPdfService
 
     private static string Dash(string s) => string.IsNullOrWhiteSpace(s) ? "—" : s;
     private static string Dots(string s) => string.IsNullOrWhiteSpace(s) ? "……" : s;
+
+    // Compact هجري/ميلادي pairing for the QR payload — mirrors the "قراراً صدر في ..." line on the
+    // page itself, minus the sentence framing.
+    private static string DecisionDate(string hijri, string gregorian)
+    {
+        var h = string.IsNullOrWhiteSpace(hijri) ? null : hijri.Trim();
+        var g = string.IsNullOrWhiteSpace(gregorian) ? null : gregorian.Trim();
+        if (h is null && g is null) return "—";
+        if (h is null) return $"{g} م";
+        if (g is null) return $"{h} هـ";
+        return $"{h} هـ - {g} م";
+    }
 
     private static Stream Resource(Assembly asm, string name) =>
         asm.GetManifestResourceStream(name) ?? throw new InvalidOperationException($"Embedded resource not found: {name}");
