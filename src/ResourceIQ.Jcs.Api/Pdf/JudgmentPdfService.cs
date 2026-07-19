@@ -267,7 +267,7 @@ public sealed class JudgmentPdfService
         });
 
     // Background watermarks: a faint centred court logo on every page, plus (for non-approved
-    // copies) the repeated "مسودة قرار" stamp drawn over it.
+    // copies) the repeated "غير مثبت" stamp drawn over it.
     private static void Background(IContainer c, bool draft) =>
         c.Layers(layers =>
         {
@@ -293,9 +293,9 @@ public sealed class JudgmentPdfService
                     for (var i = 0; i < WatermarkColumns; i++)
                         r.RelativeItem().AlignCenter().AlignMiddle()
                             .Rotate(-35)
-                            .Text("مسودة قرار")
-                            .FontFamily(Font).FontSize(24).Bold()
-                            .FontColor("#33FF0000"); // ~20% alpha via the ARGB channel (QuestPDF has no .Opacity())
+                            .Text("غير مثبت")
+                            .FontFamily(Font).FontSize(30).Bold()
+                            .FontColor("#33808080"); // ~20% alpha via the ARGB channel (QuestPDF has no .Opacity())
                 });
         });
 
