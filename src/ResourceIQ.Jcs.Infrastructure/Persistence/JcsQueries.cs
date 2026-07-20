@@ -58,6 +58,8 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
                          join rm in db.Rooms on cr.RoomId equals rm.Id
                          join uu in db.Users on cr.AssignedCopyistId equals uu.Id into uj
                          from u in uj.DefaultIfEmpty()
+                         join av in db.Users on cr.ApprovedById equals av.Id into avj
+                         from approver in avj.DefaultIfEmpty()
                          join occ in db.CopyRequests on cr.OriginalCopyId equals occ.Id into ocj
                          from orig in ocj.DefaultIfEmpty()
                          where cr.Id == id
@@ -65,6 +67,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
                          {
                              cr, CourtName = c.Name, RoomName = rm.Name,
                              CopyistName = (string?)(u != null ? u.DisplayName : null),
+                             ApprovedByName = (string?)(approver != null ? approver.DisplayName : null),
                              OriginalCopyNumber = (string?)(orig != null ? orig.CopyNumber : null),
                          }).FirstOrDefaultAsync(ct);
         if (row is null) return null;
@@ -90,7 +93,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             cr2.Content != null ? cr2.Content.RebuttalSectionsJson : "[]",
             cr2.Content != null ? cr2.Content.Body : "",
             cr2.CreatedUtc, cr2.ApprovedUtc, cr2.AcceptedUtc, cr2.PrintedUtc,
-            cr2.OriginalCopyId, row.OriginalCopyNumber, linked);
+            cr2.OriginalCopyId, row.OriginalCopyNumber, linked, row.ApprovedByName);
     }
 
     public async Task<Guid?> GetLatestCopyRequestIdAsync(IReadOnlyCollection<Guid>? courtIds, CancellationToken ct)
