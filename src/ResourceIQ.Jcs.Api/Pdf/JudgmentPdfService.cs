@@ -85,6 +85,14 @@ public sealed class JudgmentPdfService
     {
         c.Column(col =>
         {
+            // الصحيفة N — top-right corner, above everything else, matching the official template.
+            // CurrentPageNumber() is QuestPDF's built-in per-page field, so it updates automatically.
+            col.Item().AlignRight().Text(t =>
+            {
+                t.Span("الصحيفة: ");
+                t.CurrentPageNumber();
+            });
+
             col.Item().Row(row =>
             {
                 row.ConstantItem(96).Column(q =>
@@ -94,7 +102,12 @@ public sealed class JudgmentPdfService
                         q.Item().Width(84).Image(qr);
                     }
 
-                    q.Item().AlignCenter().Text(d.CopyNumber ?? (d.MiscNumber is { } mm ? $"متفرق {mm}" : "—")).FontSize(8);
+                    // Explicit per-category label, independent of a CopyNumber ?? fallback — so a
+                    // future domain change to either field can never silently hide the other's value.
+                    q.Item().AlignCenter().Text(
+                        d.CopyNumber is { } cn ? $"رقم النسخة: {cn}" :
+                        d.MiscNumber is { } mm ? $"رقم المتفرق: {mm}" : "—"
+                    ).FontSize(8);
                 });
                 row.RelativeItem().AlignMiddle().Column(t =>
                 {
@@ -107,13 +120,18 @@ public sealed class JudgmentPdfService
                 row.ConstantItem(96); // balances the QR so the title stays centred
             });
 
-            // Meta bar: رقم القرار dead-centre, لعام at the side, no case base number.
-            col.Item().PaddingTop(8).BorderTop(1.6f).BorderBottom(1.6f).BorderColor(Colors.Black)
+            // Meta bar: رقم الأساس / رقم القرار / لعام — matches the official three-cell layout,
+            // right-to-left, divided by vertical rules. رقم المتفرق stays visible under the QR above
+            // (unchanged) rather than duplicated here, since the official layout has no fourth cell.
+            col.Item().PaddingTop(8).BorderTop(1).BorderColor(Colors.Black)
                 .PaddingVertical(6).Row(m =>
                 {
-                    // رقم المتفرق shown on the start side for متفرق copies (otherwise empty balancer).
-                    m.RelativeItem().Text(d.MiscNumber is { } misc ? $"رقم المتفرق: {misc}" : "").Bold();
+                    m.RelativeItem().Text($"رقم الأساس: {Dash(d.CaseBaseNumber)}").Bold();
+                    // Fixed height, not Extend() — Extend() requests unbounded space, which conflicts
+                    // with page.Header() sizing itself FROM this same content (DocumentLayoutException).
+                    m.ConstantItem(1).Height(18).Background(Colors.Black);
                     m.RelativeItem().AlignCenter().Text($"رقم القرار: {Dash(G("decisionNumber"))}").Bold();
+                    m.ConstantItem(1).Height(18).Background(Colors.Black);
                     m.RelativeItem().AlignLeft().Text($"لعام: {Dash(year)}").Bold();
                 });
         });
@@ -197,7 +215,11 @@ public sealed class JudgmentPdfService
             // Footer line (no case base number).
             col.Item().PaddingTop(18).BorderTop(1).BorderColor(Colors.Grey.Medium).PaddingTop(6).Row(f =>
             {
-                f.RelativeItem().Text($"نسخ: {d.AssignedCopyistName ?? "—"}").FontSize(9).FontColor(Colors.Grey.Darken2);
+                f.RelativeItem().Column(fc =>
+                {
+                    fc.Item().Text($"نسخ: {d.AssignedCopyistName ?? "—"}").FontSize(9).FontColor(Colors.Grey.Darken2);
+                    fc.Item().Text($"قوبل: {d.ApprovedByName ?? "—"}").FontSize(9).FontColor(Colors.Grey.Darken2);
+                });
                 f.RelativeItem().AlignLeft().Text(d.CopyNumber is { } cn ? $"رقم النسخة: {cn}" : $"رقم المتفرق: {d.MiscNumber}").FontSize(9).FontColor(Colors.Grey.Darken2);
             });
 

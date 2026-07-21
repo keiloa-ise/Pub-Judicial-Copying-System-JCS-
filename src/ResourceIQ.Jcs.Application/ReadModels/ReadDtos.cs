@@ -55,7 +55,9 @@ public sealed record CopyRequestDetail(
     DateTimeOffset? PrintedUtc,
     Guid? OriginalCopyId,
     string? OriginalCopyNumber,
-    IReadOnlyList<LinkedMiscDto> LinkedMisc);
+    IReadOnlyList<LinkedMiscDto> LinkedMisc,
+    /// <summary>قوبل — display name of the Reviewer who approved this copy (JC-51). Null until approved.</summary>
+    string? ApprovedByName = null);
 
 /// <summary>BR-11: a متفرق copy linked to an original عادي copy (shown under the original's detail).</summary>
 public sealed record LinkedMiscDto(
