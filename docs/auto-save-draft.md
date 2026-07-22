@@ -13,6 +13,44 @@ Drafts are saved in two places:
 
 The browser does not send a request to the server on every keystroke. It saves locally after a short debounce, then syncs the latest local draft to the server on a configurable interval.
 
+## Workflow A: Draft Lifecycle
+
+This workflow describes the normal lifecycle of a draft from opening the form until the final successful submit.
+
+```mermaid
+flowchart TD
+    A["User opens a draft-enabled form"] --> B["Hook checks localStorage"]
+    B --> C["Hook checks server draft when online"]
+    C --> D{"Draft exists?"}
+    D -->|No| E["Start with empty form"]
+    D -->|Yes| F["Compare local and server updatedAt"]
+    F --> G["Select newest draft"]
+    G --> H{"User restores draft?"}
+    H -->|Yes| I["Apply payload to page state"]
+    H -->|No| J["Delete local draft and server draft"]
+    I --> K["User edits form"]
+    E --> K
+    K --> L["Save latest payload to localStorage after debounce"]
+    L --> M{"Browser online?"}
+    M -->|No| N["Keep pending local draft"]
+    M -->|Yes| O["Sync draft to server on configured interval"]
+    N --> P["Retry sync when browser goes online"]
+    P --> O
+    O --> Q["Mark local draft as synced"]
+    Q --> K
+    K --> R{"Form submitted successfully?"}
+    R -->|No| L
+    R -->|Yes| S["Clear local draft and server draft"]
+```
+
+Workflow notes:
+
+- The local browser draft is the first safety layer.
+- The server draft is the second safety layer and allows recovery outside the original browser session.
+- The newest draft is selected by comparing `updatedAt`.
+- The server sync interval is controlled by `VITE_AUTO_SAVE_DRAFT_SYNC_INTERVAL_MS`.
+- A completed form must clear its draft so stale work is not restored later.
+
 ## Main Files
 
 Frontend:
