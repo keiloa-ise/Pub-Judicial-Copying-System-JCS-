@@ -312,6 +312,53 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                     b.ToTable("FormFields");
                 });
 
+            modelBuilder.Entity("ResourceIQ.Jcs.Domain.Entities.FormDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CopyRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("FormKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("LastSyncedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyRequestId");
+
+                    b.HasIndex("UpdatedUtc");
+
+                    b.HasIndex("UserId", "FormKey")
+                        .IsUnique();
+
+                    b.ToTable("FormDrafts");
+                });
+
             modelBuilder.Entity("ResourceIQ.Jcs.Domain.Entities.FormTemplate", b =>
                 {
                     b.Property<Guid>("Id")

@@ -182,6 +182,20 @@ public sealed class FormFieldConfiguration : IEntityTypeConfiguration<FormField>
     }
 }
 
+public sealed class FormDraftConfiguration : IEntityTypeConfiguration<FormDraft>
+{
+    public void Configure(EntityTypeBuilder<FormDraft> b)
+    {
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Role).HasMaxLength(50).IsRequired();
+        b.Property(x => x.FormKey).HasMaxLength(200).IsRequired();
+        b.Property(x => x.PayloadJson).IsRequired();
+        b.HasIndex(x => new { x.UserId, x.FormKey }).IsUnique();
+        b.HasIndex(x => x.CopyRequestId);
+        b.HasIndex(x => x.UpdatedUtc);
+    }
+}
+
 public sealed class ParagraphTemplateConfiguration : IEntityTypeConfiguration<ParagraphTemplate>
 {
     public void Configure(EntityTypeBuilder<ParagraphTemplate> b)

@@ -16,9 +16,13 @@ export default defineConfig(({ mode }) => {
   const webPort = Number(env.WEB_PORT ?? 5173)
   // Proxy target: explicit override, else derived from the API's port in the same .env.
   const apiTarget = env.VITE_API_PROXY_TARGET ?? `http://localhost:${env.API_PORT ?? 5253}`
+  const autoSaveDraftSyncIntervalMs = env.VITE_AUTO_SAVE_DRAFT_SYNC_INTERVAL_MS ?? '10000'
 
   return {
     plugins: [react()],
+    define: {
+      'import.meta.env.VITE_AUTO_SAVE_DRAFT_SYNC_INTERVAL_MS': JSON.stringify(autoSaveDraftSyncIntervalMs),
+    },
     server: {
       port: webPort,
       strictPort: true,

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   api, type CopyRequestDetail, type FormTemplate, type ParagraphTemplate,
   type AuditEntry, type Lookup, type PanelMember,
@@ -7,6 +7,7 @@ import { useNav } from "../../app/nav";
 import { useL, Spinner, ErrorBox } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { RichText, plainToHtml } from "../../components/RichText";
+import { useAutoSaveDraft, type AutoSaveDraftStatus } from "../../hooks/useAutoSaveDraft";
 
 /** Known header field keys whose Hijri value is auto-derived from the Gregorian date (FR-09).
  *  The pairing is by key convention so the form template still drives rendering. */
@@ -37,6 +38,37 @@ const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&nbsp;
 let _sid = 0;
 const nextSid = () => ++_sid;
 interface EditSection { id: number; title: string; text: string; }
+interface DraftSection { title: string; text: string; }
+
+function draftStatusText(status: AutoSaveDraftStatus, L: (ar: string, en: string) => string) {
+  switch (status) {
+    case "saving": return L("جاري حفظ المسودة...", "Saving draft...");
+    case "saved": return L("تم حفظ المسودة", "Draft saved");
+    case "offline": return L("غير متصل، تم الحفظ محلياً", "Offline, saved locally");
+    case "syncing": return L("جاري مزامنة المسودة...", "Syncing draft...");
+    case "synced": return L("تمت المزامنة", "Draft synced");
+    case "error": return L("تعذر حفظ المسودة", "Could not save draft");
+    default: return null;
+  }
+}
+
+function toDraftSections(items: EditSection[]): DraftSection[] {
+  return items.map(({ title, text }) => ({ title, text }));
+}
+
+function fromDraftSections(value: unknown): EditSection[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((s) => ({
+    id: nextSid(),
+    title: typeof s?.title === "string" ? s.title : "",
+    text: typeof s?.text === "string" ? s.text : "",
+  }));
+}
+
+function fromDraftValues(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, typeof v === "string" ? v : String(v ?? "")]));
+}
 
 /** Convert a Gregorian "yyyy-MM-dd" (from <input type=date>) to a Hijri "dd/MM/yyyy" string
  *  using the browser's Umm al-Qura calendar. Returns null if the date can't be parsed. The era
@@ -215,12 +247,45 @@ export function PreparePage({ id }: { id: string }) {
     api.lookupParagraphs(formTemplateId).then(setParagraphs).catch(() => setParagraphs([]));
   }, [formTemplateId]);
 
+  const reviewerCorrecting = user?.role === "Reviewer" && detail?.state === "UnderReview";
+  const copyistEditing = detail ? detail.state === "InPreparation" || detail.state === "Unlocked" : false;
+  const copyistDrafting = user?.role === "Copyist" && copyistEditing;
+  const draftFormKey = user && detail
+    ? reviewerCorrecting
+      ? `reviewer:correct-copy:${id}:${user.userId}`
+      : copyistDrafting
+        ? `copyist:prepare-copy:${id}:${user.userId}`
+        : null
+    : null;
+  const draftPayload = useMemo(() => ({
+    formTemplateId,
+    values,
+    sections: toDraftSections(sections),
+    dissentSections: toDraftSections(dissentSections),
+    rebuttalSections: toDraftSections(rebuttalSections),
+  }), [dissentSections, formTemplateId, rebuttalSections, sections, values]);
+  const autoSave = useAutoSaveDraft({
+    userId: user?.userId,
+    role: user?.role,
+    formKey: draftFormKey,
+    copyRequestId: id,
+    payload: draftPayload,
+    enabled: !!detail && (copyistDrafting || reviewerCorrecting),
+    restorePrompt: L("توجد مسودة محفوظة، هل تريد استرجاعها؟", "A saved draft exists. Restore it?"),
+    onRestore: (payload) => {
+      setFormTemplateId(typeof payload.formTemplateId === "string" ? payload.formTemplateId : "");
+      setValues(fromDraftValues(payload.values));
+      setSections(fromDraftSections(payload.sections));
+      setDissentSections(fromDraftSections(payload.dissentSections));
+      setRebuttalSections(fromDraftSections(payload.rebuttalSections));
+    },
+  });
+  const autoSaveText = draftStatusText(autoSave.status, L);
+
   if (err && !detail) return <ErrorBox message={err} />;
   if (!detail) return <Spinner label={L("جارٍ التحميل…", "Loading…")} />;
 
   // FR-10: a Reviewer corrects directly while UnderReview; the copyist edits InPreparation/Unlocked.
-  const reviewerCorrecting = user?.role === "Reviewer" && detail.state === "UnderReview";
-  const copyistEditing = detail.state === "InPreparation" || detail.state === "Unlocked";
   if (!reviewerCorrecting && !copyistEditing) {
     return <ErrorBox message={L("لا يمكن تحرير هذه النسخة في حالتها الحالية.", "This copy cannot be edited in its current state.")} />;
   }
@@ -332,6 +397,7 @@ export function PreparePage({ id }: { id: string }) {
       if (reviewerCorrecting) await api.correct(id, payload); else await api.saveDraft(id, payload);
       if (finalize) {
         if (reviewerCorrecting) await api.approve(id); else await api.submit(id);
+        await autoSave.clearDraft();
         navigate("request", id);
         return;
       }
@@ -360,6 +426,7 @@ export function PreparePage({ id }: { id: string }) {
 
       {err && <ErrorBox message={err} />}
       {ok && <div className="okbox">{ok}</div>}
+      {autoSaveText && <p className="muted" style={{ fontSize: 13 }}>{autoSaveText}</p>}
       {lastReturn && (
         <div className="returnbanner">
           <strong>{L("ملاحظات المدقق للتصحيح", "Reviewer's corrections to address")}</strong>

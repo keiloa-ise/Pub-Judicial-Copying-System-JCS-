@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ResourceIQ.Jcs.Domain.Enums;
 
 namespace ResourceIQ.Jcs.Api.Contracts;
@@ -15,6 +16,16 @@ public sealed record CreateCopyRequestRequest(
 public sealed record ExpediteRequest(string ExpediteRequestNumber);
 
 public sealed record SaveDraftRequest(Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string RebuttalSectionsJson, string Body);
+
+public sealed record FormDraftRequest(JsonElement Payload, DateTimeOffset UpdatedAt, Guid? CopyRequestId);
+
+public sealed record FormDraftResponse(
+    string FormKey,
+    string Role,
+    Guid? CopyRequestId,
+    JsonElement Payload,
+    DateTimeOffset UpdatedAt,
+    string Source);
 
 public sealed record ReturnRequest(string Corrections);
 
