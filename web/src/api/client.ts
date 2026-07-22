@@ -32,6 +32,14 @@ export type CaseCategory = "Normal" | "Miscellaneous";
 export type CaseUrgency = "Normal" | "Suspended" | "Expedited";
 
 export interface LoginResult { token: string; userId: string; displayName: string; role: Role; }
+export interface FormDraft<TPayload = unknown> {
+  formKey: string;
+  role: string;
+  copyRequestId: string | null;
+  payload: TPayload;
+  updatedAt: string;
+  source: "local" | "server";
+}
 
 export interface CopyRequestListItem {
   id: string; copyNumber: string | null; state: CopyState;
@@ -213,6 +221,14 @@ export const api = {
   deleteRequest: (id: string) => request<void>(`/api/copy-requests/${id}`, { method: "DELETE" }),
   saveDraft: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string }) =>
     request<void>(`/api/copy-requests/${id}/content`, { method: "PUT", body: JSON.stringify(body) }),
+  getFormDraft: <TPayload = unknown>(formKey: string) =>
+    request<FormDraft<TPayload> | null>(`/api/form-drafts/${encodeURIComponent(formKey)}`),
+  upsertFormDraft: <TPayload = unknown>(formKey: string, payload: TPayload, updatedAt: string, copyRequestId?: string | null) =>
+    request<FormDraft<TPayload>>(`/api/form-drafts/${encodeURIComponent(formKey)}`, {
+      method: "PUT", body: JSON.stringify({ payload, updatedAt, copyRequestId: copyRequestId ?? null }),
+    }),
+  deleteFormDraft: (formKey: string) =>
+    request<void>(`/api/form-drafts/${encodeURIComponent(formKey)}`, { method: "DELETE" }),
   submit: (id: string) => request<void>(`/api/copy-requests/${id}/submit`, { method: "POST" }),
   // FR-10: Reviewer corrects the copy in place (same body shape as saveDraft); stays under review.
   correct: (id: string, body: { formTemplateId?: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string }) =>

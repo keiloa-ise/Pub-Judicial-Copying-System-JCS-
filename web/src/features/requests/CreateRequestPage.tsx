@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption, type LastNumber } from "../../api/client";
 import { useNav } from "../../app/nav";
 import { useL, ErrorBox, categoryLabels, urgencyLabels } from "../../app/ui";
+import { useAuth } from "../../auth/AuthContext";
+import { useAutoSaveDraft, type AutoSaveDraftStatus } from "../../hooks/useAutoSaveDraft";
 import { useI18n } from "../../i18n";
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
+
+function draftStatusText(status: AutoSaveDraftStatus, L: (ar: string, en: string) => string) {
+  switch (status) {
+    case "saving": return L("جاري حفظ المسودة...", "Saving draft...");
+    case "saved": return L("تم حفظ المسودة", "Draft saved");
+    case "offline": return L("غير متصل، تم الحفظ محلياً", "Offline, saved locally");
+    case "syncing": return L("جاري مزامنة المسودة...", "Syncing draft...");
+    case "synced": return L("تمت المزامنة", "Draft synced");
+    case "error": return L("تعذر حفظ المسودة", "Could not save draft");
+    default: return null;
+  }
+}
 
 /**
  * FR-06 / BR-11: Registry Head creates a copy request.
@@ -14,6 +28,7 @@ const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
  */
 export function CreateRequestPage() {
   const { navigate } = useNav();
+  const { user } = useAuth();
   const { lang } = useI18n();
   const L = useL();
   const ak = lang === "ar" ? "ar" : "en";
@@ -37,8 +52,47 @@ export function CreateRequestPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const searchSeq = useRef(0);
+  const restoringDraft = useRef(false);
 
   const isMisc = category === "Miscellaneous";
+  const draftFormKey = user ? `registry-head:create-copy-request:${user.userId}` : null;
+  const draftPayload = useMemo(() => ({
+    courtId,
+    roomId,
+    originalId,
+    originalSearch,
+    copyistId,
+    filingDate,
+    caseBase,
+    category,
+    urgency,
+    expediteNo,
+    referenceNo,
+  }), [caseBase, category, copyistId, courtId, expediteNo, filingDate, originalId, originalSearch, referenceNo, roomId, urgency]);
+  const autoSave = useAutoSaveDraft({
+    userId: user?.userId,
+    role: user?.role,
+    formKey: draftFormKey,
+    payload: draftPayload,
+    enabled: user?.role === "RegistryHead",
+    restorePrompt: L("توجد مسودة محفوظة، هل تريد استرجاعها؟", "A saved draft exists. Restore it?"),
+    onRestore: (payload) => {
+      restoringDraft.current = true;
+      setCourtId(typeof payload.courtId === "string" ? payload.courtId : "");
+      setRoomId(typeof payload.roomId === "string" ? payload.roomId : "");
+      setOriginalId(typeof payload.originalId === "string" ? payload.originalId : "");
+      setOriginalSearch(typeof payload.originalSearch === "string" ? payload.originalSearch : "");
+      setCopyistId(typeof payload.copyistId === "string" ? payload.copyistId : "");
+      setFilingDate(typeof payload.filingDate === "string" ? payload.filingDate : "");
+      setCaseBase(typeof payload.caseBase === "string" ? payload.caseBase : "");
+      setCategory(payload.category === "Miscellaneous" ? "Miscellaneous" : "Normal");
+      setUrgency(payload.urgency === "Suspended" || payload.urgency === "Expedited" ? payload.urgency : "Normal");
+      setExpediteNo(typeof payload.expediteNo === "string" ? payload.expediteNo : "");
+      setReferenceNo(typeof payload.referenceNo === "string" ? payload.referenceNo : "");
+      window.setTimeout(() => { restoringDraft.current = false; }, 100);
+    },
+  });
+  const autoSaveText = draftStatusText(autoSave.status, L);
 
   useEffect(() => {
     api.lookupCourts().then(setCourts).catch((e) => setErr(e.message));
@@ -76,20 +130,22 @@ export function CreateRequestPage() {
 
   // Copyists follow the selected court (both عادي and متفرق now pick court + room).
   useEffect(() => {
-    setCopyistId("");
+    if (!restoringDraft.current) setCopyistId("");
     if (!courtId) { setCopyists([]); return; }
     api.lookupCopyists(courtId).then(setCopyists).catch((e) => setErr(e.message));
   }, [courtId]);
 
   // Rooms follow the selected court (for both عادي and متفرق). Reset the room when the court changes.
   useEffect(() => {
-    setRoomId("");
+    if (!restoringDraft.current) setRoomId("");
     if (!courtId) { setRooms([]); return; }
     api.lookupRooms(courtId).then(setRooms).catch((e) => setErr(e.message));
   }, [courtId]);
 
   // A stale original from another court/room must never survive a court/room change.
-  useEffect(() => { setOriginalId(""); setOriginalSearch(""); }, [courtId, roomId]);
+  useEffect(() => {
+    if (!restoringDraft.current) { setOriginalId(""); setOriginalSearch(""); }
+  }, [courtId, roomId]);
 
   // FR-03/FR-06: once court+room are chosen, show the last issued number for that scope this year.
   useEffect(() => {
@@ -116,6 +172,7 @@ export function CreateRequestPage() {
         referenceNumber: isMisc && referenceNo ? referenceNo : null,
         originalCopyId: isMisc ? originalId : null,
       });
+      await autoSave.clearDraft();
       navigate("request", res.id);
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -249,6 +306,7 @@ export function CreateRequestPage() {
         <p className="muted" style={{ fontSize: 13 }}>
           {L("يُسجّل «تاريخ الحجز» تلقائياً من النظام عند الإنشاء.", "The reservation date is set automatically by the system at creation.")}
         </p>
+        {autoSaveText && <p className="muted" style={{ fontSize: 13 }}>{autoSaveText}</p>}
 
         <div className="btn-row">
           <button className="btn" type="submit" disabled={busy}>{busy ? L("جارٍ الإنشاء…", "Creating…") : L("إنشاء الطلب", "Create request")}</button>

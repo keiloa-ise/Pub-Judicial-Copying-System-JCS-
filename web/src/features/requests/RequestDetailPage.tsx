@@ -3,6 +3,7 @@ import { api, type CopyRequestDetail, type AuditEntry } from "../../api/client";
 import { useNav } from "../../app/nav";
 import { useL, StateBadge, Spinner, ErrorBox, auditLabels, categoryLabels, urgencyLabels } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
+import { clearLocalFormDraft } from "../../hooks/useAutoSaveDraft";
 import { useI18n } from "../../i18n";
 
 // FR-13: stage names for the per-stage timeline — the stage that FOLLOWS each audit action.
@@ -54,10 +55,17 @@ export function RequestDetailPage({ id }: { id: string }) {
     navigate("print", id);
   }
 
+  async function clearReviewerDraft() {
+    if (user?.role !== "Reviewer") return;
+    const key = `reviewer:correct-copy:${id}:${user.userId}`;
+    clearLocalFormDraft(user.userId, key);
+    try { await api.deleteFormDraft(key); } catch { /* draft cleanup must not block the workflow */ }
+  }
+
   // FR-11 → FR-15 R2: approve, then auto-print the newly-approved copy.
   async function approveAndPrint() {
     setBusy(true); setErr(null);
-    try { await api.approve(id); goPrint(true); }
+    try { await api.approve(id); await clearReviewerDraft(); goPrint(true); }
     catch (e) { setErr((e as Error).message); setBusy(false); }
   }
 
@@ -214,7 +222,7 @@ export function RequestDetailPage({ id }: { id: string }) {
             <button className="btn" disabled={busy} onClick={() => navigate("prepare", detail.id)}>{L("تصحيح مباشر", "Correct directly")}</button>
             <button className="btn btn--ghost" disabled={busy} onClick={() => {
               const c = window.prompt(L("سبب الإعادة للتصحيح:", "Corrections / reason for return:")) ?? "";
-              if (c.trim()) act(() => api.returnForCorrection(detail.id, c.trim()));
+              if (c.trim()) act(async () => { await api.returnForCorrection(detail.id, c.trim()); await clearReviewerDraft(); });
             }}>{L("إعادة للتصحيح", "Return for correction")}</button>
           </>
         )}

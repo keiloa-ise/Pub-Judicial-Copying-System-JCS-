@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ResourceIQ.Jcs.Application.Admin;
 using ResourceIQ.Jcs.Application.Auth;
 using ResourceIQ.Jcs.Application.CopyRequests;
+using ResourceIQ.Jcs.Application.FormDrafts;
 using ResourceIQ.Jcs.Application.Lookups;
 using ResourceIQ.Jcs.Application.Reports;
 using ResourceIQ.Jcs.Application.Review;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<ReviewService>();
         services.AddScoped<UnlockService>();
         services.AddScoped<CopyRequestReadService>();
+        services.AddScoped<FormDraftService>();
         services.AddScoped<LookupService>();
         services.AddScoped<AdminService>();
         services.AddScoped<ReportService>();

@@ -100,6 +100,29 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
     public bool Contains(Guid id) => _store.ContainsKey(id);
 }
 
+internal sealed class FakeFormDraftStore : IFormDraftStore
+{
+    private readonly Dictionary<(Guid UserId, string FormKey), FormDraft> _store = new();
+
+    public Task<FormDraft?> GetAsync(Guid userId, string formKey, CancellationToken ct) =>
+        Task.FromResult(_store.GetValueOrDefault((userId, formKey)));
+
+    public Task AddAsync(FormDraft draft, CancellationToken ct)
+    {
+        _store[(draft.UserId, draft.FormKey)] = draft;
+        return Task.CompletedTask;
+    }
+
+    public void Remove(FormDraft draft) => _store.Remove((draft.UserId, draft.FormKey));
+
+    public Task<int> DeleteOlderThanAsync(DateTimeOffset cutoffUtc, CancellationToken ct)
+    {
+        var keys = _store.Where(x => x.Value.UpdatedUtc < cutoffUtc).Select(x => x.Key).ToList();
+        foreach (var key in keys) _store.Remove(key);
+        return Task.FromResult(keys.Count);
+    }
+}
+
 /// <summary>Read-side fake. Only <see cref="GetRoomAsync"/> is exercised by the service tests
 /// (room↔court validation on create); the rest are not invoked by those tests.</summary>
 internal sealed class FakeQueries : IJcsQueries
