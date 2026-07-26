@@ -93,7 +93,7 @@ export interface Judge { id: string; name: string; isActive: boolean; roomIds: s
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
 /** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim). */
-export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; }
+export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; delegationDate?: string; delegationNumber?: string; }
 export interface ParagraphTemplate { id: string; title: string; body: string; isArchived: boolean; formTemplateId: string | null; }
 export interface FormField { id: string; key: string; label: string; type: string; validationRulesJson: string | null; order: number; }
 export interface FormTemplate { id: string; name: string; isActive: boolean; fields: FormField[]; }

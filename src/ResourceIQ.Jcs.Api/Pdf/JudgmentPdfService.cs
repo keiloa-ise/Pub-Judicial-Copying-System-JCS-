@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using ClosedXML;
 using QRCoder;
 using QuestPDF.Drawing;
@@ -25,6 +26,13 @@ public sealed class JudgmentPdfService
 {
     private const string Font = "Amiri";
     private static readonly byte[] LogoFaint;
+
+    // Delegation (ندب): the delegation date/number are always SAVED; whether they are PRINTED on the
+    // decision is controlled by the PRINT_DELEGATION_INFO flag (read from .env — default off).
+    private readonly bool _printDelegationInfo;
+
+    public JudgmentPdfService(IConfiguration config) =>
+        _printDelegationInfo = string.Equals(config["PRINT_DELEGATION_INFO"], "true", StringComparison.OrdinalIgnoreCase);
 
     static JudgmentPdfService()
     {
@@ -75,7 +83,7 @@ public sealed class JudgmentPdfService
                 page.Background().Element(bg => Background(bg, draft));
 
                 page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year, draft));
-                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections, rebuttalSections));
+                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections, rebuttalSections, _printDelegationInfo));
             });
         }).GeneratePdf();
     }
@@ -139,11 +147,18 @@ public sealed class JudgmentPdfService
 
     // ── Body ──
     private static void Body(IContainer c, CopyRequestDetail d, Func<string, string> G,
-        IReadOnlyList<(string Name, string Title, bool Dissenting, bool Replying)> members,
+        IReadOnlyList<(string Name, string Title, bool Dissenting, bool Replying, string DelegationDate, string DelegationNumber)> members,
         IReadOnlyList<(string Title, string Text)> sections,
         IReadOnlyList<(string Title, string Text)> dissentSections,
-        IReadOnlyList<(string Title, string Text)> rebuttalSections)
+        IReadOnlyList<(string Title, string Text)> rebuttalSections,
+        bool printDelegationInfo)
     {
+        // ندب: appended to a delegated judge's capacity, only when both parts exist AND printing is on.
+        string DelegationSuffix(string date, string number) =>
+            printDelegationInfo && !string.IsNullOrWhiteSpace(number) && !string.IsNullOrWhiteSpace(date)
+                ? $" (بموجب قرار الندب رقم {number} بتاريخ {date})"
+                : "";
+
         c.PaddingTop(12).Column(col =>
         {
             col.Spacing(10);
@@ -166,9 +181,13 @@ public sealed class JudgmentPdfService
                 // Titles (صفات) are chosen by the copyist; fall back to the classic roles for
                 // copies saved before per-member titles existed.
                 var presidentTitle = G("presidentTitle");
-                p.Item().Element(e => PanelRow(e, Dash(G("president")), string.IsNullOrWhiteSpace(presidentTitle) ? "رئيساً" : presidentTitle));
+                var presidentRole = (string.IsNullOrWhiteSpace(presidentTitle) ? "رئيساً" : presidentTitle)
+                    + (string.Equals(G("presidentDelegated"), "true", StringComparison.OrdinalIgnoreCase)
+                        ? DelegationSuffix(G("presidentDelegationDate"), G("presidentDelegationNumber")) : "");
+                p.Item().Element(e => PanelRow(e, Dash(G("president")), presidentRole));
                 foreach (var m in members)
-                    p.Item().Element(e => PanelRow(e, m.Name, string.IsNullOrWhiteSpace(m.Title) ? "مستشاراً" : m.Title));
+                    p.Item().Element(e => PanelRow(e, m.Name,
+                        (string.IsNullOrWhiteSpace(m.Title) ? "مستشاراً" : m.Title) + DelegationSuffix(m.DelegationDate, m.DelegationNumber)));
             });
 
             // Dissenting judges (رأي مخالف): the president and/or any member flagged as dissenting.
@@ -338,9 +357,9 @@ public sealed class JudgmentPdfService
 
     // Panel members: new shape is an array of { judge, title } objects; legacy copies stored a
     // plain array of judge-name strings (rendered with the default "مستشاراً" title downstream).
-    private static List<(string Name, string Title, bool Dissenting, bool Replying)> ParsePanelMembers(string json)
+    private static List<(string Name, string Title, bool Dissenting, bool Replying, string DelegationDate, string DelegationNumber)> ParsePanelMembers(string json)
     {
-        var list = new List<(string, string, bool, bool)>();
+        var list = new List<(string, string, bool, bool, string, string)>();
         if (string.IsNullOrWhiteSpace(json)) return list;
         try
         {
@@ -351,7 +370,7 @@ public sealed class JudgmentPdfService
                     if (e.ValueKind == JsonValueKind.String)
                     {
                         var s = e.GetString();
-                        if (!string.IsNullOrWhiteSpace(s)) list.Add((s!.Trim(), "", false, false));
+                        if (!string.IsNullOrWhiteSpace(s)) list.Add((s!.Trim(), "", false, false, "", ""));
                     }
                     else if (e.ValueKind == JsonValueKind.Object)
                     {
@@ -360,7 +379,10 @@ public sealed class JudgmentPdfService
                         var title = Str(e, "title");
                         var dissenting = e.TryGetProperty("dissenting", out var dv) && dv.ValueKind == JsonValueKind.True;
                         var replying = e.TryGetProperty("replying", out var rv) && rv.ValueKind == JsonValueKind.True;
-                        if (name.Length > 0) list.Add((name, title, dissenting, replying));
+                        // ندب: delegation date/number — printed only when PRINT_DELEGATION_INFO is on.
+                        var delegationDate = Str(e, "delegationDate");
+                        var delegationNumber = Str(e, "delegationNumber");
+                        if (name.Length > 0) list.Add((name, title, dissenting, replying, delegationDate, delegationNumber));
                     }
                 }
         }
