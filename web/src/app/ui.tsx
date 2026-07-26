@@ -16,8 +16,11 @@ const stateLabels: Record<CopyState, { ar: string; en: string; cls: string }> = 
   Unlocked:      { ar: "مفتوح", en: "Unlocked", cls: "s-unlocked" },
 };
 
-export function StateBadge({ state }: { state: CopyState }) {
+export function StateBadge({ state, awaitingAcceptance }: { state: CopyState; awaitingAcceptance?: boolean }) {
   const { lang } = useI18n();
+  // FR-13: an unaccepted In-preparation copy reads as «بانتظار القبول», not «قيد التحضير».
+  if (awaitingAcceptance)
+    return <span className="badge s-awaiting">{lang === "ar" ? "بانتظار القبول" : "Awaiting acceptance"}</span>;
   const s = stateLabels[state];
   return <span className={`badge ${s.cls}`}>{lang === "ar" ? s.ar : s.en}</span>;
 }

@@ -199,11 +199,11 @@ public sealed class CopyRequestsController(
         return NoContent();
     }
 
-    /// <summary>FR-06: Registry Head escalates a non-approved copy to موقوف.</summary>
+    /// <summary>FR-06: Registry Head escalates a non-approved copy to موقوف (with an optional note).</summary>
     [HttpPost("{id:guid}/suspend")]
-    public async Task<IActionResult> Suspend(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Suspend(Guid id, SuspendRequest? body, CancellationToken ct)
     {
-        await suspendService.HandleAsync(new SuspendCopyCommand(id), ct);
+        await suspendService.HandleAsync(new SuspendCopyCommand(id, body?.Note), ct);
         return NoContent();
     }
 

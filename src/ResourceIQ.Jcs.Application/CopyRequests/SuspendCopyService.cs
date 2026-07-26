@@ -5,7 +5,7 @@ using ResourceIQ.Jcs.Domain.Enums;
 
 namespace ResourceIQ.Jcs.Application.CopyRequests;
 
-public sealed record SuspendCopyCommand(Guid CopyRequestId);
+public sealed record SuspendCopyCommand(Guid CopyRequestId, string? Note = null);
 
 /// <summary>
 /// Registry Head escalates a non-approved copy to موقوف, reusing the same role/court
@@ -26,10 +26,11 @@ public sealed class SuspendCopyService(
                       ?? throw new NotFoundException("Copy request not found.");
         Guard.RequireAssignedCourt(currentUser, request.CourtId);
 
+        var note = string.IsNullOrWhiteSpace(cmd.Note) ? null : cmd.Note.Trim();
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
-            request.EscalateToSuspended(clock.UtcNow);
-            audit.Append(request.Id, AuditAction.Suspend,
+            request.EscalateToSuspended(note, clock.UtcNow);
+            audit.Append(request.Id, AuditAction.Suspend, reason: note,
                 afterJson: "{\"urgency\":\"Suspended\"}");
             await unitOfWork.SaveChangesAsync(token);
             return 0;

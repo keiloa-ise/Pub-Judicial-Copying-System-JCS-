@@ -45,6 +45,7 @@ export interface CopyRequestListItem {
 export interface LinkedMisc { id: string; miscNumber: number | null; referenceNumber: string | null; state: CopyState; reservationDate: string; }
 export interface CopyRequestDetail extends CopyRequestListItem {
   referenceNumber: string | null;
+  suspendRequestNumber: string | null; // FR-06: optional note captured on escalation to موقوف.
   formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string; approvedUtc: string | null;
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
   printedUtc: string | null; // FR-15: set when printed in the current phase; blocks re-print of approved copies.
@@ -199,7 +200,8 @@ export const api = {
   accept: (id: string) => request<void>(`/api/copy-requests/${id}/accept`, { method: "POST" }),
   expedite: (id: string, expediteRequestNumber: string) =>
     request<void>(`/api/copy-requests/${id}/expedite`, { method: "POST", body: JSON.stringify({ expediteRequestNumber }) }),
-  suspend: (id: string) => request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST" }),
+  suspend: (id: string, note?: string | null) =>
+    request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST", body: JSON.stringify({ note: note ?? null }) }),
   // BR-11: Approved عادي copies a متفرق can be based on.
   // BR-11: Approved originals for the متفرق picker — filtered server-side to a room (+ optional search),
   // capped server-side, so the payload stays small no matter how many approved copies exist.

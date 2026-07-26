@@ -270,12 +270,13 @@ public class CopyRequestTests
         var r = CopyRequest.Create(Guid.NewGuid(), Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1), CaseCategory.Normal, CaseUrgency.Expedited, "EXP-9", null, null, Guid.NewGuid(), Now);
         r.AssignNumber("1/2026/0001");
 
-        r.EscalateToSuspended(Now);
+        r.EscalateToSuspended("SUS-7", Now);
 
         Assert.Equal(CaseUrgency.Suspended, r.Urgency);
         Assert.Null(r.ExpediteRequestNumber);
+        Assert.Equal("SUS-7", r.SuspendRequestNumber); // optional note is captured
 
         var ap = Approved();
-        Assert.Throws<DomainException>(() => ap.EscalateToSuspended(Now)); // approved → rejected
+        Assert.Throws<DomainException>(() => ap.EscalateToSuspended(null, Now)); // approved → rejected
     }
 }

@@ -166,7 +166,9 @@ the same رقم الأساس; متفرق copies inherit the original's and are e
   - **Suspension escalation:** a **non-approved** copy may also be escalated to **موقوف** at any time
     by the Registry Head, including copies that are currently **عادي** or **مستعجل**. This is the
     highest priority tier, does **not** require an expedite-request number, and once a copy is
-    **موقوف** it cannot be downgraded back to **مستعجل** or **عادي** through the escalation flow.
+    **موقوف** it cannot be downgraded back to **مستعجل** or **عادي** through the escalation flow. An
+    **optional note (رقم طلب التصعيد / ملاحظة)** may be captured with the escalation and is stored on
+    the copy (and in the audit entry).
 
 The former "مرجع الحكم" field and the "الإجراء" (procedure) field were removed.
 **Acceptance:** a sequential copy number is generated automatically and atomically for عادي copies;
@@ -183,6 +185,13 @@ cannot accept a copy while one of theirs ranks before it (higher tier, or same t
 **acceptance time is recorded** on the copy (for reporting — see FR-13), and accepted copies are
 **highlighted** (distinct colour) in the work queue. After acceptance the Copyist edits assigned
 requests, completes form fields, adds legal paragraphs, and saves drafts.
+- **Copyist queue display (طلباتي):** the **single** copy the Copyist may accept next (top-ranked
+  unaccepted) is shown with a **faint-red** row; any **other** unaccepted copy is **blurred and cannot
+  be opened** until the higher-priority ones are accepted (enforcing the strict order visually). An
+  unaccepted copy's status reads **«بانتظار القبول»** (not «قيد التحضير») until it is accepted.
+- **Approved visibility (config):** whether **Approved** decisions appear in the Copyist's and
+  Reviewer's «طلباتي» queue is controlled by the **`SHOW_APPROVED_IN_QUEUE`** flag (default off);
+  when off they are hidden to keep the working queue focused.
 **Acceptance:** edit/submit before acceptance is rejected; acceptance must follow tier-then-oldest order
 (no skipping); the acceptance timestamp is stored; drafts may be saved multiple times.
 - **Hijri date:** when the Copyist enters the Gregorian issue date, the system auto-fills the
@@ -410,7 +419,7 @@ permanent audit log).
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
 | BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
-| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. A **non-approved** copy may also be escalated from **عادي** or **مستعجل** to **موقوف** at any time by the Registry Head; موقوف is the highest priority and cannot be downgraded through the escalation flow. |
+| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. A **non-approved** copy may also be escalated from **عادي** or **مستعجل** to **موقوف** at any time by the Registry Head (an optional note — رقم طلب التصعيد — may be captured); موقوف is the highest priority and cannot be downgraded through the escalation flow. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 
 ## 11. Open decisions summary

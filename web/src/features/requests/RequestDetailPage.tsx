@@ -111,6 +111,9 @@ export function RequestDetailPage({ id }: { id: string }) {
           {detail.expediteRequestNumber && (
             <><dt>{L("رقم طلب الاستعجال", "Expedite request no.")}</dt><dd>{detail.expediteRequestNumber}</dd></>
           )}
+          {detail.suspendRequestNumber && (
+            <><dt>{L("رقم طلب التصعيد", "Escalation request no.")}</dt><dd>{detail.suspendRequestNumber}</dd></>
+          )}
           {detail.referenceNumber && (
             <><dt>{L("رقم المرجع", "Reference no.")}</dt><dd>{detail.referenceNumber}</dd></>
           )}
@@ -202,9 +205,13 @@ export function RequestDetailPage({ id }: { id: string }) {
             if (no.trim()) act(() => api.expedite(detail.id, no.trim()));
           }}>{L("تصعيد إلى مستعجل", "Escalate to expedited")}</button>
         )}
-        {/* FR-06: Registry Head escalates a non-approved copy to موقوف. */}
+        {/* FR-06: Registry Head escalates a non-approved copy to موقوف (with an optional note). */}
         {user?.role === "RegistryHead" && detail.state !== "Approved" && detail.urgency !== "Suspended" && (
-          <button className="btn btn--ghost" disabled={busy} onClick={() => act(() => api.suspend(detail.id))}>
+          <button className="btn btn--ghost" disabled={busy} onClick={() => {
+            const note = window.prompt(L("رقم طلب التصعيد / ملاحظة (اختياري):", "Escalation request no. / note (optional):"));
+            if (note === null) return; // cancelled
+            act(() => api.suspend(detail.id, note.trim() || null));
+          }}>
             {L("تصعيد إلى موقوف", "Escalate to suspended")}
           </button>
         )}

@@ -84,7 +84,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             cr2.Id, cr2.CopyNumber, cr2.State, cr2.CourtId, row.CourtName,
             cr2.RoomId, row.RoomName,
             cr2.CaseBaseNumber, cr2.CaseFilingDate, cr2.ReservationDate,
-            cr2.Category, cr2.Urgency, cr2.ExpediteRequestNumber, cr2.ReferenceNumber, cr2.MiscNumber,
+            cr2.Category, cr2.Urgency, cr2.ExpediteRequestNumber, cr2.SuspendRequestNumber, cr2.ReferenceNumber, cr2.MiscNumber,
             cr2.AssignedCopyistId, row.CopyistName,
             cr2.Content != null ? cr2.Content.FormTemplateId : null,
             cr2.Content != null ? cr2.Content.FieldValuesJson : "{}",
