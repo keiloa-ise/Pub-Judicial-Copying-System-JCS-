@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<ReviewService>();
         services.AddScoped<UnlockService>();
         services.AddScoped<CopyRequestReadService>();
+        services.AddScoped<FormDraftCleanupService>();
         services.AddScoped<FormDraftService>();
         services.AddScoped<LookupService>();
         services.AddScoped<AdminService>();

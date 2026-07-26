@@ -72,10 +72,18 @@ Backend:
 
 - `src/ResourceIQ.Jcs.Api/Controllers/FormDraftsController.cs`
   Exposes the authenticated draft endpoints.
+- `src/ResourceIQ.Jcs.Api/Program.cs`
+  Registers Hangfire and schedules stale-draft cleanup.
+- `src/ResourceIQ.Jcs.Api/Bootstrap/FormDraftCleanupJob.cs`
+  Runs the recurring stale-draft cleanup job.
+- `src/ResourceIQ.Jcs.Api/Bootstrap/FormDraftCleanupOptions.cs`
+  Defines the cleanup retention and cron settings.
 - `src/ResourceIQ.Jcs.Api/Contracts/Dtos.cs`
   Defines draft request and response DTOs.
 - `src/ResourceIQ.Jcs.Application/FormDrafts/FormDraftService.cs`
   Contains authorization, validation, and draft business rules.
+- `src/ResourceIQ.Jcs.Application/FormDrafts/FormDraftCleanupService.cs`
+  Contains the reusable stale-draft cleanup rule.
 - `src/ResourceIQ.Jcs.Application/Abstractions/IFormDraftStore.cs`
   Defines persistence operations used by the application layer.
 - `src/ResourceIQ.Jcs.Infrastructure/Persistence/FormDraftStore.cs`
@@ -117,6 +125,19 @@ The same variable is also listed in `.env.example` so new environments know abou
 Because the frontend is built by Vite and the shared `.env` file is in the repository root, `web/vite.config.ts` explicitly loads the root `.env` and exposes `VITE_AUTO_SAVE_DRAFT_SYNC_INTERVAL_MS` through `define`.
 
 If the value is missing, invalid, or less than or equal to zero, the hook falls back to `10000`.
+
+Stale server drafts are cleaned by Hangfire using `FormDraftCleanup` settings:
+
+```json
+"FormDraftCleanup": {
+  "Enabled": true,
+  "OlderThanDays": 30,
+  "Cron": "0 3 * * *",
+  "TimeZoneId": "UTC"
+}
+```
+
+By default this removes server drafts older than 30 days once per day at 03:00 UTC.
 
 ## Draft Identity
 
@@ -279,7 +300,9 @@ DELETE /api/form-drafts/admin/old?olderThanDays=30
 
 All endpoints require authentication.
 
-The cleanup endpoint requires the `Administrator` role.
+The cleanup endpoint requires the `Administrator` role. Stale drafts are also cleaned automatically by the
+`form-drafts-cleanup` Hangfire recurring job, using the same retention rule configured under
+`FormDraftCleanup`.
 
 ### Application service
 
@@ -291,7 +314,7 @@ The cleanup endpoint requires the `Administrator` role.
 - checks access to the related copy request when `copyRequestId` exists
 - creates a new draft when none exists
 - updates the existing draft for the same user and form key when one exists
-- deletes old drafts for admin cleanup
+- delegates old-draft cleanup to `FormDraftCleanupService` after admin authorization
 
 ### Access rules
 

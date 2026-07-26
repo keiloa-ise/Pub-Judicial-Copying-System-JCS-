@@ -27,7 +27,8 @@ public sealed class FormDraftService(
     IClock clock,
     IFormDraftStore drafts,
     ICopyRequestRepository copyRequests,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    FormDraftCleanupService cleanup)
 {
     public async Task<FormDraftResult?> GetAsync(string formKey, CancellationToken ct)
     {
@@ -50,7 +51,7 @@ public sealed class FormDraftService(
 
         var formKey = cmd.FormKey.Trim();
         var now = clock.UtcNow;
-        var updatedAt = cmd.UpdatedAt == default ? now : cmd.UpdatedAt.ToUniversalTime();
+        var updatedAt = now;
         var draft = await drafts.GetAsync(currentUser.Id, formKey, ct);
 
         if (draft is null)
@@ -96,10 +97,7 @@ public sealed class FormDraftService(
     public async Task<int> DeleteOlderThanAsync(int olderThanDays, CancellationToken ct)
     {
         Guard.RequireRole(currentUser, Role.Administrator);
-        if (olderThanDays < 1) throw new DomainException("olderThanDays must be at least 1.");
-
-        var cutoff = clock.UtcNow.AddDays(-olderThanDays);
-        return await drafts.DeleteOlderThanAsync(cutoff, ct);
+        return await cleanup.DeleteOlderThanAsync(olderThanDays, ct);
     }
 
     private async Task EnsureCopyRequestAccessAsync(Guid? copyRequestId, bool requireActiveDraftState, CancellationToken ct)

@@ -13,19 +13,25 @@ public class FormDraftServiceTests
     private readonly FakeCopyRequestRepository _repo = new();
     private readonly FakeFormDraftStore _drafts = new();
 
+    private FormDraftService CreateService(FakeCurrentUser user) =>
+        new(user, _clock, _drafts, _repo, _uow, new FormDraftCleanupService(_clock, _drafts));
+
     [Fact]
     public async Task User_can_upsert_read_and_delete_their_own_form_draft()
     {
         var user = new FakeCurrentUser { Role = Role.RegistryHead };
-        var svc = new FormDraftService(user, _clock, _drafts, _repo, _uow);
+        var svc = CreateService(user);
         const string key = "registry-head:create-copy-request:user";
+        var clientTime = Now.AddDays(1);
 
         var saved = await svc.UpsertAsync(new UpsertFormDraftCommand(
-            key, "{\"courtId\":\"c1\"}", Now, null), CancellationToken.None);
+            key, "{\"courtId\":\"c1\"}", clientTime, null), CancellationToken.None);
         var loaded = await svc.GetAsync(key, CancellationToken.None);
 
         Assert.Equal(key, saved.FormKey);
         Assert.Equal("{\"courtId\":\"c1\"}", loaded?.PayloadJson);
+        Assert.Equal(Now, saved.UpdatedAt);
+        Assert.Equal(Now, loaded?.UpdatedAt);
         Assert.Equal(1, _uow.SaveCount);
 
         await svc.DeleteAsync(key, CancellationToken.None);
@@ -39,7 +45,7 @@ public class FormDraftServiceTests
         var copyist = new FakeCurrentUser { Role = Role.Copyist };
         copyist.Courts.Add(court);
         var request = SeedInPreparation(court, assignedCopyistId: Guid.NewGuid());
-        var svc = new FormDraftService(copyist, _clock, _drafts, _repo, _uow);
+        var svc = CreateService(copyist);
 
         await Assert.ThrowsAsync<ForbiddenException>(() => svc.UpsertAsync(new UpsertFormDraftCommand(
             $"copyist:prepare-copy:{request.Id}:{copyist.Id}",
@@ -56,7 +62,7 @@ public class FormDraftServiceTests
         copyist.Courts.Add(court);
         var request = SeedInPreparation(court, copyist.Id);
         var key = $"copyist:prepare-copy:{request.Id}:{copyist.Id}";
-        var svc = new FormDraftService(copyist, _clock, _drafts, _repo, _uow);
+        var svc = CreateService(copyist);
 
         await svc.UpsertAsync(new UpsertFormDraftCommand(key, "{\"body\":\"draft\"}", Now, request.Id), CancellationToken.None);
         request.AcceptByCopyist(copyist.Id, Now);
@@ -75,7 +81,7 @@ public class FormDraftServiceTests
         var fresh = FormDraft.Create(admin.Id, Role.Administrator.ToString(), "fresh", null, "{}", Now, Now);
         await _drafts.AddAsync(old, CancellationToken.None);
         await _drafts.AddAsync(fresh, CancellationToken.None);
-        var svc = new FormDraftService(admin, _clock, _drafts, _repo, _uow);
+        var svc = CreateService(admin);
 
         var deleted = await svc.DeleteOlderThanAsync(30, CancellationToken.None);
 

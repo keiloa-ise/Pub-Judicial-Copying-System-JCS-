@@ -1,9 +1,12 @@
 using System.Text;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ResourceIQ.Jcs.Api.Auth;
+using ResourceIQ.Jcs.Api.Bootstrap;
 using ResourceIQ.Jcs.Api.Middleware;
 using ResourceIQ.Jcs.Application;
 using ResourceIQ.Jcs.Application.Abstractions;
@@ -104,6 +107,29 @@ builder.Services.AddCors(o => o.AddPolicy(SpaCors, p => p
     .WithOrigins("http://localhost:5173")
     .AllowAnyHeader().AllowAnyMethod()));
 
+builder.Services.AddOptions<FormDraftCleanupOptions>()
+    .Bind(builder.Configuration.GetSection(FormDraftCleanupOptions.SectionName))
+    .Validate(o => o.OlderThanDays >= 1, "FormDraftCleanup:OlderThanDays must be at least 1.")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Cron), "FormDraftCleanup:Cron is required.")
+    .ValidateOnStart();
+builder.Services.AddScoped<FormDraftCleanupJob>();
+
+var hangfireConnectionString = builder.Configuration.GetConnectionString("Jcs")
+    ?? throw new InvalidOperationException("Connection string 'Jcs' is required for Hangfire.");
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(hangfireConnectionString, new SqlServerStorageOptions
+    {
+        PrepareSchemaIfNecessary = true,
+        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+        QueuePollInterval = TimeSpan.FromSeconds(15),
+        UseRecommendedIsolationLevel = true
+    }));
+builder.Services.AddHangfireServer();
+
 var app = builder.Build();
 
 // DEVELOPMENT: apply migrations + seed demo data on startup for convenience.
@@ -120,6 +146,23 @@ if (app.Environment.IsDevelopment())
 else
 {
     await ResourceIQ.Jcs.Api.Bootstrap.ProductionBootstrap.RunAsync(app);
+}
+
+var formDraftCleanupOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FormDraftCleanupOptions>>().Value;
+if (formDraftCleanupOptions.Enabled)
+{
+    RecurringJob.AddOrUpdate<FormDraftCleanupJob>(
+        FormDraftCleanupJob.RecurringJobId,
+        job => job.DeleteOlderThanConfiguredAsync(),
+        formDraftCleanupOptions.Cron,
+        new RecurringJobOptions
+        {
+            TimeZone = ResolveTimeZone(formDraftCleanupOptions.TimeZoneId)
+        });
+}
+else
+{
+    RecurringJob.RemoveIfExists(FormDraftCleanupJob.RecurringJobId);
 }
 
 // Swagger UI at /api/docs (JSON at /api/docs/v1/swagger.json) — anonymous, proxy-friendly.
@@ -139,3 +182,12 @@ app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 app.Run();
+
+static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+{
+    if (string.IsNullOrWhiteSpace(timeZoneId) ||
+        timeZoneId.Equals("UTC", StringComparison.OrdinalIgnoreCase))
+        return TimeZoneInfo.Utc;
+
+    return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+}
