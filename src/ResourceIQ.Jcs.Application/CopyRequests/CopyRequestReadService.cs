@@ -101,14 +101,31 @@ public sealed class CopyRequestReadService(
         return queries.ListSelectableOriginalsAsync(currentUser.CourtIds, roomId, search, OriginalsPageSize, ct);
     }
 
-    /// <summary>FR-15 batch print (Administrator only): the copies in a court+room whose تاريخ الحجز
-    /// falls within [from, to], of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state).
-    /// A read-only administrative export: NOT subject to the single-print order/once rules and it never
-    /// marks copies as printed. Ordering follows the same priority as the work queue.</summary>
+    /// <summary>Feature flag: batch print is available to the Registry Head (in addition to the
+    /// Administrator) when ALLOW_HEAD_BATCH_PRINT is true (default true, read from .env).</summary>
+    private static bool AllowHeadBatchPrint =>
+        !string.Equals(Environment.GetEnvironmentVariable("ALLOW_HEAD_BATCH_PRINT"), "false", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>FR-15 batch print: the copies in a court+room whose تاريخ الحجز falls within [from, to],
+    /// of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state). Available to the
+    /// Administrator, and to the Registry Head (their courts) when ALLOW_HEAD_BATCH_PRINT is on.
+    /// A read-only administrative export: NOT subject to the single-print order/once rules; never marks printed.</summary>
     public Task<IReadOnlyList<CopyRequestListItem>> ListBatchPrintAsync(
         Guid courtId, Guid roomId, DateOnly from, DateOnly to, bool approved, CancellationToken ct)
     {
-        Guard.RequireRole(currentUser, Role.Administrator);
+        if (currentUser.Role == Role.Administrator)
+        {
+            // unrestricted
+        }
+        else if (currentUser.Role == Role.RegistryHead && AllowHeadBatchPrint)
+        {
+            Guard.RequireAssignedCourt(currentUser, courtId); // BR-06: only their own courts
+        }
+        else
+        {
+            throw new ForbiddenException("Not permitted to batch-print.");
+        }
+
         IReadOnlyCollection<CopyState> states = approved
             ? [CopyState.Approved]
             : [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];

@@ -113,6 +113,10 @@ internal sealed class FakeQueries : IJcsQueries
         => Task.FromResult(new DeletionTargetsDto([], []));
     public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<OriginalCopyOption>>([]);
+    public Task<IReadOnlyList<CopyRequestListItem>> ListReviewerPrintQueueAsync(IReadOnlyCollection<Guid> courtIds, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CopyRequestListItem>>([]);
+    public Task<IReadOnlyList<CopyRequestListItem>> ListCopyistPrintQueueAsync(Guid copyistId, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CopyRequestListItem>>([]);
     public Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CopyNumberCounterDto>>([]);
     public Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct)

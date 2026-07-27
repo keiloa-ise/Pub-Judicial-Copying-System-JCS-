@@ -26,6 +26,14 @@ public interface IJcsQueries
     Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(
         IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct);
 
+    /// <summary>FR-15 reviewer print queue: Approved but not-yet-printed decisions in the given courts,
+    /// ordered by priority (موقوف > مستعجل > عادي) then oldest-first (for cumulative selection).</summary>
+    Task<IReadOnlyList<CopyRequestListItem>> ListReviewerPrintQueueAsync(IReadOnlyCollection<Guid> courtIds, CancellationToken ct);
+
+    /// <summary>FR-15 copyist print queue: the copyist's ACCEPTED, in-preparation, not-yet-printed
+    /// decisions (printable as drafts), ordered by priority then oldest-first.</summary>
+    Task<IReadOnlyList<CopyRequestListItem>> ListCopyistPrintQueueAsync(Guid copyistId, CancellationToken ct);
+
     /// <summary>FR-17: existing رقم النسخة and رقم المتفرق start-point counters (for the admin screen).</summary>
     Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct);
     Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct);

@@ -277,6 +277,28 @@ The copy can be printed as the official "إعلام الحكم" document.
   المخالف») is printed on a **new page after the dissent appendix** — reason sections + signatures of
   the replying judges only.
 
+#### Print policy
+- **Ordered printing (R1):** a decision's FIRST print follows priority + sequence — **موقوف > مستعجل >
+  عادي**, then oldest-first — within its court and its queue (approved vs non-approved, ordered
+  independently). **Auto-print on approval (R2):** approving a copy opens its print automatically.
+  **Re-print (R3):** after the first print an approved copy may be viewed and **re-printed at any time**
+  (no unlock/re-approval needed). Preview (`GET /pdf`) is read-only and never marks a copy printed;
+  printing (`POST /print`) is the controlled action (records the print, audited as `Print`).
+- **Batch print — Administrator (FR-15/BR):** between two **تاريخ الحجز** dates for a specific court+room,
+  of one kind (مثبتة/مسودة); **each decision is rendered to its own PDF** and delivered as a **ZIP**.
+  Read-only export — not subject to the order/once rules and never marks copies printed.
+- **Reviewer print queue (المدقق):** a queue of decisions awaiting print; selecting a decision's
+  checkbox **cumulatively selects all decisions ranked before it** (e.g. checking #25 selects 1–25),
+  reflecting the strict order. Selected decisions are **printed directly** and **removed from the queue**.
+- **Copyist print queue (المحرر):** when a copyist **accepts** a decision (before it is finalized) it
+  enters a **copyist-only print-waiting queue** shown in a **separate tab**. The copyist selects an
+  **arbitrary** set from the queue; they are **printed directly** and **removed from the queue**.
+- **Feature flags** (`.env`, read by the API):
+  - **`ALLOW_COPYIST_REPRINT`** (default **true**): the individual reprint option is available to the
+    **Copyist + Registry Head**; when **false**, only the **Registry Head**.
+  - **`ALLOW_HEAD_BATCH_PRINT`** (default **true**): the batch-print tab is available to the
+    **Administrator + Registry Head** (per permissions); when **false**, only the **Administrator**.
+
 ### FR-16 — Delete a last decision (Registry Head)
 Deletion is performed only through a dedicated **deletion-operations window** (no per-copy delete
 button), within the Registry Head's courts, in **two sections** (current year). The copy + content are

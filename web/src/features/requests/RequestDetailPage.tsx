@@ -3,6 +3,7 @@ import { api, type CopyRequestDetail, type AuditEntry } from "../../api/client";
 import { useNav } from "../../app/nav";
 import { useL, StateBadge, Spinner, ErrorBox, auditLabels, categoryLabels, urgencyLabels } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
+import { useConfig } from "../../app/useConfig";
 import { useI18n } from "../../i18n";
 
 // FR-13: stage names for the per-stage timeline — the stage that FOLLOWS each audit action.
@@ -23,6 +24,7 @@ function fmtDuration(ms: number): string {
 export function RequestDetailPage({ id }: { id: string }) {
   const { navigate } = useNav();
   const { user } = useAuth();
+  const cfg = useConfig();
   const { lang } = useI18n();
   const L = useL();
   const [detail, setDetail] = useState<CopyRequestDetail | null>(null);
@@ -184,9 +186,12 @@ export function RequestDetailPage({ id }: { id: string }) {
         <button className="btn btn--gold" onClick={() => goPrint(false)}>
           {L("معاينة", "Preview")}
         </button>
-        <button className="btn btn--gold" disabled={busy} onClick={() => goPrint(true)}>
-          {L("طباعة (إعلام الحكم)", "Print (judgment notice)")}
-        </button>
+        {/* FR-15 item 3: individual reprint is hidden for the Copyist when ALLOW_COPYIST_REPRINT is off. */}
+        {!(user?.role === "Copyist" && cfg && !cfg.allowCopyistReprint) && (
+          <button className="btn btn--gold" disabled={busy} onClick={() => goPrint(true)}>
+            {L("طباعة (إعلام الحكم)", "Print (judgment notice)")}
+          </button>
+        )}
         {/* FR-07: the copyist must accept before editing. */}
         {isAssignedCopyist && detail.state === "InPreparation" && !detail.acceptedUtc && (
           <button className="btn btn--gold" disabled={busy} onClick={() => act(() => api.accept(detail.id))}>

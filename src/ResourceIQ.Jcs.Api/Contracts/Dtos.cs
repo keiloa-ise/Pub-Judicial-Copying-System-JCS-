@@ -19,6 +19,9 @@ public sealed record SuspendRequest(string? Note);
 
 public sealed record SaveDraftRequest(Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string RebuttalSectionsJson, string Body);
 
+// FR-15 print queue: the selected decisions to print (marked printed, rendered into one merged PDF).
+public sealed record PrintManyRequest(IReadOnlyList<Guid> Ids);
+
 public sealed record ReturnRequest(string Corrections);
 
 public sealed record UnlockRequest(string Reason);

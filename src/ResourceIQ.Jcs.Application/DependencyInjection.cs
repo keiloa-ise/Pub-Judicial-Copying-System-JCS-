@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ExpediteCopyService>();
         services.AddScoped<SuspendCopyService>();
         services.AddScoped<PrintCopyService>();
+        services.AddScoped<PrintQueueService>();
         services.AddScoped<PrepareCopyService>();
         services.AddScoped<SubmitForReviewService>();
         services.AddScoped<ReviewService>();

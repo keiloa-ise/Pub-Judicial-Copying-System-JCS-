@@ -32,6 +32,8 @@ export type CaseCategory = "Normal" | "Miscellaneous";
 export type CaseUrgency = "Normal" | "Suspended" | "Expedited";
 
 export interface LoginResult { token: string; userId: string; displayName: string; role: Role; }
+/** FR-15 feature flags (both default true). Server enforces; the SPA uses these only to hide options. */
+export interface FeatureFlags { allowCopyistReprint: boolean; allowHeadBatchPrint: boolean; }
 
 export interface CopyRequestListItem {
   id: string; copyNumber: string | null; state: CopyState;
@@ -257,6 +259,28 @@ export const api = {
     copies: (f: ReportFilter, page: number, pageSize: number) => {
       const p = reportParams(f); p.set("page", String(page)); p.set("pageSize", String(pageSize));
       return request<Paged<CopyRow>>(`/api/reports/copies?${p}`);
+    },
+  },
+
+  // ── Feature flags (server-authoritative; used to hide role-gated UI) ──
+  config: () => request<FeatureFlags>("/api/config"),
+
+  // ── FR-15 print queues ──
+  printQueue: {
+    reviewer: () => request<CopyRequestListItem[]>("/api/print-queue/reviewer"),
+    copyist: () => request<CopyRequestListItem[]>("/api/print-queue/copyist"),
+    // Marks the selected decisions printed and returns them as ONE merged PDF blob to print.
+    print: async (ids: string[]): Promise<Blob> => {
+      const res = await fetch(`${BASE}/api/print-queue/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(body.error ?? `Request failed (${res.status})`);
+      }
+      return res.blob();
     },
   },
 

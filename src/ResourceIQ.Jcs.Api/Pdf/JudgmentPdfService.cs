@@ -45,7 +45,15 @@ public sealed class JudgmentPdfService
         LogoFaint = ReadAll(asm, "ResourceIQ.Jcs.Api.Assets.logo-faint.png");
     }
 
-    public byte[] Render(CopyRequestDetail d)
+    public byte[] Render(CopyRequestDetail d) =>
+        Document.Create(doc => AddDecisionPage(doc, d)).GeneratePdf();
+
+    /// <summary>FR-15 print queue: render several decisions into ONE PDF (each on its own page-set),
+    /// in the given order — for printing a selected batch from the reviewer/copyist print queue.</summary>
+    public byte[] RenderMany(IReadOnlyList<CopyRequestDetail> decisions) =>
+        Document.Create(doc => { foreach (var d in decisions) AddDecisionPage(doc, d); }).GeneratePdf();
+
+    private void AddDecisionPage(IDocumentContainer doc, CopyRequestDetail d)
     {
         var fields = ParseFields(d.FieldValuesJson);
         string G(string key) => fields.TryGetValue(key, out var v) ? v.Trim() : "";
@@ -72,20 +80,17 @@ public sealed class JudgmentPdfService
         };
         var qr = QrPng(string.Join("\n", qrLines));
 
-        return Document.Create(doc =>
+        doc.Page(page =>
         {
-            doc.Page(page =>
-            {
-                page.Size(PageSizes.A4);
-                page.Margin(16, Unit.Millimetre);
-                page.DefaultTextStyle(t => t.FontFamily(Font).FontSize(12).LineHeight(1.5f).DirectionFromRightToLeft());
+            page.Size(PageSizes.A4);
+            page.Margin(16, Unit.Millimetre);
+            page.DefaultTextStyle(t => t.FontFamily(Font).FontSize(12).LineHeight(1.5f).DirectionFromRightToLeft());
 
-                page.Background().Element(bg => Background(bg, draft));
+            page.Background().Element(bg => Background(bg, draft));
 
-                page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year, draft));
-                page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections, rebuttalSections, _printDelegationInfo));
-            });
-        }).GeneratePdf();
+            page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year, draft));
+            page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections, rebuttalSections, _printDelegationInfo));
+        });
     }
 
     // ── Header (repeats on every printed page) ──
