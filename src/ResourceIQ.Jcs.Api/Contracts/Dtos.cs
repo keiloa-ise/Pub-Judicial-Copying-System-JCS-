@@ -15,6 +15,9 @@ public sealed record CreateCopyRequestRequest(
 // FR-06: escalate a non-approved copy to مستعجل (Registry Head) — expedite number required.
 public sealed record ExpediteRequest(string ExpediteRequestNumber);
 
+// FR-06: escalate a non-approved copy to موقوف (Registry Head) — an optional note (رقم طلب التصعيد).
+public sealed record SuspendRequest(string? Note);
+
 public sealed record SaveDraftRequest(Guid? FormTemplateId, string FieldValuesJson, string SectionsJson, string DissentSectionsJson, string RebuttalSectionsJson, string Body);
 
 public sealed record FormDraftRequest(JsonElement Payload, DateTimeOffset UpdatedAt, Guid? CopyRequestId);

@@ -166,7 +166,9 @@ the same رقم الأساس; متفرق copies inherit the original's and are e
   - **Suspension escalation:** a **non-approved** copy may also be escalated to **موقوف** at any time
     by the Registry Head, including copies that are currently **عادي** or **مستعجل**. This is the
     highest priority tier, does **not** require an expedite-request number, and once a copy is
-    **موقوف** it cannot be downgraded back to **مستعجل** or **عادي** through the escalation flow.
+    **موقوف** it cannot be downgraded back to **مستعجل** or **عادي** through the escalation flow. An
+    **optional note (رقم طلب التصعيد / ملاحظة)** may be captured with the escalation and is stored on
+    the copy (and in the audit entry).
 
 The former "مرجع الحكم" field and the "الإجراء" (procedure) field were removed.
 **Acceptance:** a sequential copy number is generated automatically and atomically for عادي copies;
@@ -183,6 +185,13 @@ cannot accept a copy while one of theirs ranks before it (higher tier, or same t
 **acceptance time is recorded** on the copy (for reporting — see FR-13), and accepted copies are
 **highlighted** (distinct colour) in the work queue. After acceptance the Copyist edits assigned
 requests, completes form fields, adds legal paragraphs, and saves drafts.
+- **Copyist queue display (طلباتي):** the **single** copy the Copyist may accept next (top-ranked
+  unaccepted) is shown with a **faint-red** row; any **other** unaccepted copy is **blurred and cannot
+  be opened** until the higher-priority ones are accepted (enforcing the strict order visually). An
+  unaccepted copy's status reads **«بانتظار القبول»** (not «قيد التحضير») until it is accepted.
+- **Approved visibility (config):** whether **Approved** decisions appear in the Copyist's and
+  Reviewer's «طلباتي» queue is controlled by the **`SHOW_APPROVED_IN_QUEUE`** flag (default off);
+  when off they are hidden to keep the working queue focused.
 **Acceptance:** edit/submit before acceptance is rejected; acceptance must follow tier-then-oldest order
 (no skipping); the acceptance timestamp is stored; drafts may be saved multiple times.
 - **Hijri date:** when the Copyist enters the Gregorian issue date, the system auto-fills the
@@ -233,6 +242,11 @@ headline metric.
 - **Per-judge** productivity is **approximate**: judges are stored as free-text names in each copy's
   panel (president/members) rather than as structural links, so the report aggregates Approved copies
   by the judge names found in their content.
+- **Judge work log (سجل أعمال القضاة):** a **detailed** report — between two **تاريخ الحجز** dates and
+  across **all states** — listing, **per judge**, every decision they sat on with the **role** (رئيس/عضو),
+  court/room, رقم القرار, state, and — when they were **delegated (ندب)** — the **delegation date and
+  decision number** (all read from the panel stored in `FieldValuesJson`). Exportable (CSV/Excel) like
+  the other reports and scoped server-side by role + courts (BR-06).
 - **Stage timeline (FR-13 UX):** the copy detail page shows a **per-stage timeline** — each workflow
   milestone (إنشاء/قبول/تحضير/مراجعة/اعتماد…) with the **time spent in that stage**, derived from the
   append-only audit trail.
@@ -262,6 +276,29 @@ The copy can be printed as the official "إعلام الحكم" document.
 - If one or more judges **reply to the dissent (FR-20)**, a **reply appendix** («الرد على الرأي
   المخالف») is printed on a **new page after the dissent appendix** — reason sections + signatures of
   the replying judges only.
+
+#### Print policy
+- **Ordered printing (R1):** a decision's FIRST print follows priority + sequence — **موقوف > مستعجل >
+  عادي**, then oldest-first — within its court and its queue (approved vs non-approved, ordered
+  independently). **On approval, a decision is NOT auto-printed** — it enters the **reviewer print queue**
+  (see below) from which the reviewer prints it. **Re-print (R3):** after its first print an approved copy
+  may be viewed and **re-printed at any time** (no unlock/re-approval needed). Preview (`GET /pdf`) is
+  read-only and never marks a copy printed; printing (`POST /print`) is the controlled action (records
+  the print, audited as `Print`).
+- **Batch print — Administrator (FR-15/BR):** between two **تاريخ الحجز** dates for a specific court+room,
+  of one kind (مثبتة/مسودة); **each decision is rendered to its own PDF** and delivered as a **ZIP**.
+  Read-only export — not subject to the order/once rules and never marks copies printed.
+- **Reviewer print queue (المدقق):** a queue of decisions awaiting print; selecting a decision's
+  checkbox **cumulatively selects all decisions ranked before it** (e.g. checking #25 selects 1–25),
+  reflecting the strict order. Selected decisions are **printed directly** and **removed from the queue**.
+- **Copyist print queue (المحرر):** when a copyist **accepts** a decision (before it is finalized) it
+  enters a **copyist-only print-waiting queue** shown in a **separate tab**. The copyist selects an
+  **arbitrary** set from the queue; they are **printed directly** and **removed from the queue**.
+- **Feature flags** (`.env`, read by the API):
+  - **`ALLOW_COPYIST_REPRINT`** (default **true**): the individual reprint option is available to the
+    **Copyist + Registry Head**; when **false**, only the **Registry Head**.
+  - **`ALLOW_HEAD_BATCH_PRINT`** (default **true**): the batch-print tab is available to the
+    **Administrator + Registry Head** (per permissions); when **false**, only the **Administrator**.
 
 ### FR-16 — Delete a last decision (Registry Head)
 Deletion is performed only through a dedicated **deletion-operations window** (no per-copy delete
@@ -410,7 +447,7 @@ permanent audit log).
 | BR-10 | Work-queue execution priority by الحالة: موقوف > مستعجل > عادي (default). مستعجل requires an expedite-request number. |
 | BR-11 | A متفرق copy is **based on an Approved عادي copy** (النسخة الأصلية) and is **linked** to it: it gets **no رقم النسخة**, only an auto **رقم المتفرق** (by the room's numbering policy — court / room / special level A–Z **per court**, reset yearly), and **inherits** the original's court/room/رقم الأساس. رقم المرجع is **optional**. One original may have many linked متفرق copies. |
 | BR-12 | رقم الأساس is **unique per court for عادي copies** (متفرق inherit the original's and are excluded). تاريخ الحجز is **server-assigned** at creation (not editable). |
-| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. A **non-approved** copy may also be escalated from **عادي** or **مستعجل** to **موقوف** at any time by the Registry Head; موقوف is the highest priority and cannot be downgraded through the escalation flow. |
+| BR-13 | The Copyist must **accept** a copy before editing/submitting it; acceptance follows a **strict order** — priority tier (موقوف > مستعجل > عادي) then **oldest-first** within a tier (no skipping) — and its timestamp is recorded. The **Reviewer's approval** follows the **same strict order** (a copy cannot be approved while a higher-ranked copy is still under review in the reviewer's courts). A **non-approved** copy may be escalated to **مستعجل** at any time by the Registry Head (expedite number required), raising its priority. A **non-approved** copy may also be escalated from **عادي** or **مستعجل** to **موقوف** at any time by the Registry Head (an optional note — رقم طلب التصعيد — may be captured); موقوف is the highest priority and cannot be downgraded through the escalation flow. |
 | BR-14 | Names are unique: **court name** and **judge name** are unique globally; **room name** is unique within its court. |
 
 ## 11. Open decisions summary

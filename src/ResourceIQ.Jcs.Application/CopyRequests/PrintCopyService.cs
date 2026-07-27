@@ -23,6 +23,9 @@ public sealed class PrintCopyService(
     IAuditWriter audit,
     IUnitOfWork unitOfWork)
 {
+    private static bool AllowCopyistReprint =>
+        !string.Equals(Environment.GetEnvironmentVariable("ALLOW_COPYIST_REPRINT"), "false", StringComparison.OrdinalIgnoreCase);
+
     public async Task HandleAsync(PrintCopyCommand cmd, CancellationToken ct)
     {
         var request = await repository.GetAsync(cmd.CopyRequestId, ct)
@@ -31,6 +34,12 @@ public sealed class PrintCopyService(
         // Same court-scoped visibility as viewing (BR-06); Administrators are unrestricted.
         if (currentUser.Role != Role.Administrator)
             Guard.RequireAssignedCourt(currentUser, request.CourtId);
+
+        // FR-15 item 3: the individual (re)print option for a Copyist is gated by ALLOW_COPYIST_REPRINT
+        // (default true). When false, individual print is limited to the Registry Head. Other roles
+        // (auto-print on approval by the Reviewer, batch/queue flows) are unaffected.
+        if (currentUser.Role == Role.Copyist && !AllowCopyistReprint)
+            throw new ForbiddenException("إعادة الطباعة الفردية غير متاحة للناسخ.");
 
         var isApproved = request.State == CopyState.Approved;
 

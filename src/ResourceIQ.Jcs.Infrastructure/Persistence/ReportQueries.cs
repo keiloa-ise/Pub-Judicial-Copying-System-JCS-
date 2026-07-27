@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ResourceIQ.Jcs.Application.Abstractions;
 using ResourceIQ.Jcs.Application.Reports;
@@ -138,25 +139,96 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
 
     private static IEnumerable<string> ExtractPanel(string? json)
     {
-        if (string.IsNullOrWhiteSpace(json)) yield break;
-        System.Text.Json.JsonDocument doc;
-        try { doc = System.Text.Json.JsonDocument.Parse(json); } catch { yield break; }
+        var seen = new HashSet<string>();
+        foreach (var p in ParsePanel(json).Participants)
+            if (seen.Add(p.Name)) yield return p.Name;
+    }
+
+    /// <summary>FR-13: one judge's participation in a decision's panel, read from FieldValuesJson.</summary>
+    private sealed record PanelParticipant(string Name, string Role, bool Delegated, string? DelegationNumber, string? DelegationDate);
+
+    /// <summary>Parses the panel (president + members) and رقم القرار from a copy's FieldValuesJson.
+    /// Members may be the current object shape ({judge, delegated, delegationDate, delegationNumber, …})
+    /// or the legacy string shape (name only). Delegation fields are read only for delegated judges.</summary>
+    private static (string? DecisionNumber, List<PanelParticipant> Participants) ParsePanel(string? json)
+    {
+        var list = new List<PanelParticipant>();
+        if (string.IsNullOrWhiteSpace(json)) return (null, list);
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(json); } catch { return (null, list); }
         using (doc)
         {
-            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) yield break;
-            var seen = new HashSet<string>();
-            if (doc.RootElement.TryGetProperty("president", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String)
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return (null, list);
+
+            var president = Str(root, "president");
+            if (!string.IsNullOrEmpty(president))
             {
-                var n = p.GetString()?.Trim();
-                if (!string.IsNullOrEmpty(n) && seen.Add(n)) yield return n;
+                var del = string.Equals(Str(root, "presidentDelegated"), "true", StringComparison.OrdinalIgnoreCase);
+                list.Add(new PanelParticipant(president!, "رئيس", del,
+                    del ? Str(root, "presidentDelegationNumber") : null,
+                    del ? Str(root, "presidentDelegationDate") : null));
             }
-            if (doc.RootElement.TryGetProperty("members", out var m) && m.ValueKind == System.Text.Json.JsonValueKind.Array)
+
+            if (root.TryGetProperty("members", out var m) && m.ValueKind == JsonValueKind.Array)
                 foreach (var e in m.EnumerateArray())
                 {
-                    var n = (e.ValueKind == System.Text.Json.JsonValueKind.String ? e.GetString() : null)?.Trim();
-                    if (!string.IsNullOrEmpty(n) && seen.Add(n)) yield return n;
+                    if (e.ValueKind == JsonValueKind.String)
+                    {
+                        var n = e.GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(n)) list.Add(new PanelParticipant(n!, "عضو", false, null, null));
+                    }
+                    else if (e.ValueKind == JsonValueKind.Object)
+                    {
+                        var n = Str(e, "judge") ?? Str(e, "name");
+                        if (string.IsNullOrEmpty(n)) continue;
+                        var del = e.TryGetProperty("delegated", out var dv) && dv.ValueKind == JsonValueKind.True;
+                        list.Add(new PanelParticipant(n!, "عضو", del,
+                            del ? Str(e, "delegationNumber") : null,
+                            del ? Str(e, "delegationDate") : null));
+                    }
                 }
+            return (Str(root, "decisionNumber"), list);
         }
+
+        static string? Str(JsonElement e, string prop)
+        {
+            if (!e.TryGetProperty(prop, out var v) || v.ValueKind != JsonValueKind.String) return null;
+            var s = v.GetString()?.Trim();
+            return string.IsNullOrEmpty(s) ? null : s;
+        }
+    }
+
+    public async Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct)
+    {
+        // This report's date basis is تاريخ الحجز (ReservationDate), not creation — so bypass Base's
+        // CreatedUtc date filter (keep its scope + court/room/status) and range on ReservationDate here.
+        var q = Base(scope, filter with { FromDate = null, ToDate = null });
+        if (filter.FromDate is { } fd) q = q.Where(x => x.ReservationDate >= fd);
+        if (filter.ToDate is { } td) q = q.Where(x => x.ReservationDate <= td);
+
+        var rows = await (from cr in q
+                          join c in db.Courts on cr.CourtId equals c.Id
+                          join rm in db.Rooms on cr.RoomId equals rm.Id
+                          join cc in db.CopyContents on cr.Id equals cc.CopyRequestId into ccj
+                          from content in ccj.DefaultIfEmpty()
+                          select new
+                          {
+                              cr.CopyNumber, cr.MiscNumber, cr.ReservationDate, cr.State,
+                              CourtName = c.Name, RoomName = rm.Name,
+                              Json = content != null ? content.FieldValuesJson : null,
+                          }).ToListAsync(ct);
+
+        var result = new List<JudgeWorkLogRow>();
+        foreach (var r in rows)
+        {
+            var (decisionNumber, participants) = ParsePanel(r.Json);
+            foreach (var p in participants)
+                result.Add(new JudgeWorkLogRow(
+                    p.Name, r.CopyNumber, r.MiscNumber, decisionNumber, r.CourtName, r.RoomName,
+                    r.ReservationDate, r.State, p.Role, p.Delegated, p.DelegationNumber, p.DelegationDate));
+        }
+        return result.OrderBy(x => x.JudgeName).ThenBy(x => x.ReservationDate).ToList();
     }
 
     public async Task<ReportSummaryDto> SummaryAsync(ReportScope scope, ReportFilter filter, CancellationToken ct)

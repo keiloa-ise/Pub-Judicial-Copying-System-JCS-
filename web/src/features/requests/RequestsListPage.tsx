@@ -71,6 +71,14 @@ export function RequestsListPage() {
 
   const activeCount = Object.values(filters).filter(Boolean).length;
 
+  // FR-13: the copyist may accept only the top-ranked unaccepted copy. The list arrives in server
+  // priority order, so the FIRST unaccepted In-preparation item is the one available to accept; any
+  // other unaccepted item is locked (blurred + not openable) until the higher-priority ones are taken.
+  const isCopyist = user?.role === "Copyist";
+  const acceptableId = isCopyist
+    ? (items ?? []).find((r) => r.state === "InPreparation" && !r.acceptedUtc)?.id ?? null
+    : null;
+
   const sort = useSort<CopyRequestListItem>(items ?? [], {
     copyNumber: (r) => r.copyNumber,
     court: (r) => r.courtName,
@@ -148,19 +156,29 @@ export function RequestsListPage() {
             {items.length === 0 && (
               <tr><td className="empty" colSpan={8}>{L("لا توجد نتائج", "No results")}</td></tr>
             )}
-            {sort.sorted.map((r) => (
-              <tr key={r.id} onClick={() => navigate("request", r.id)} className={r.acceptedUtc ? "row-accepted" : undefined}
-                title={r.acceptedUtc ? L("مقبول من الناسخ", "Accepted by the copyist") : undefined}>
-                <td><strong>{r.copyNumber ?? "—"}</strong></td>
-                <td>{r.courtName}</td>
-                <td>{r.roomName}</td>
-                <td>{r.caseBaseNumber}</td>
-                <td>{r.miscNumber ?? "—"}</td>
-                <td>{r.expediteRequestNumber ?? "—"}</td>
-                <td>{r.assignedCopyistName ?? "—"}</td>
-                <td><StateBadge state={r.state} /></td>
-              </tr>
-            ))}
+            {sort.sorted.map((r) => {
+              const unaccepted = r.state === "InPreparation" && !r.acceptedUtc;
+              const acceptable = isCopyist && r.id === acceptableId;
+              const locked = isCopyist && unaccepted && r.id !== acceptableId;
+              const cls = [r.acceptedUtc ? "row-accepted" : "", acceptable ? "row-acceptable" : "", locked ? "row-locked" : ""]
+                .filter(Boolean).join(" ") || undefined;
+              return (
+                <tr key={r.id} className={cls}
+                  onClick={() => { if (!locked) navigate("request", r.id); }}
+                  title={locked ? L("لا يمكن فتح هذا الطلب قبل قبول الطلبات الأعلى أولوية", "Cannot open until higher-priority requests are accepted")
+                    : acceptable ? L("متاح للقبول", "Available to accept")
+                    : r.acceptedUtc ? L("مقبول من الناسخ", "Accepted by the copyist") : undefined}>
+                  <td><strong>{r.copyNumber ?? "—"}</strong></td>
+                  <td>{r.courtName}</td>
+                  <td>{r.roomName}</td>
+                  <td>{r.caseBaseNumber}</td>
+                  <td>{r.miscNumber ?? "—"}</td>
+                  <td>{r.expediteRequestNumber ?? "—"}</td>
+                  <td>{r.assignedCopyistName ?? "—"}</td>
+                  <td><StateBadge state={r.state} awaitingAcceptance={unaccepted} /></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

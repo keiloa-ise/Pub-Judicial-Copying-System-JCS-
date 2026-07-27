@@ -19,6 +19,9 @@ public interface IReportQueries
     /// <summary>FR-13: approximate productivity per judge — counts Approved copies whose panel
     /// (president/members in the content) names that judge. Names are matched as stored (free text).</summary>
     Task<IReadOnlyList<CountRow>> CountByJudgeAsync(ReportScope scope, ReportFilter filter, CancellationToken ct);
+    /// <summary>FR-13: per-judge work log — one row per decision each judge sat on (as president/member)
+    /// within the ReservationDate range, any state; includes role + delegation (read from FieldValuesJson).</summary>
+    Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct);
     Task<TurnaroundReportDto> TurnaroundAsync(ReportScope scope, ReportFilter filter, CancellationToken ct);
     Task<Paged<CopyRowDto>> CopiesAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct);
 }

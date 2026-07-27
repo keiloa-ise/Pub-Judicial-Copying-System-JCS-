@@ -38,6 +38,7 @@
 .s-review { background: #dbeafe; color: #1e519b; }
 .s-approved { background: #d8f0e2; color: #1d7a47; }
 .s-unlocked { background: #fde2e2; color: #a12626; }
+.s-awaiting { background: #fde2e2; color: #a12626; }
 
 /* Forms */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
@@ -82,6 +83,15 @@
 .table tbody tr.row-accepted { background: #eef9f1; }
 .table tbody tr.row-accepted:hover { background: #e2f4e9; }
 .table tbody tr.row-accepted td:first-child { box-shadow: inset 3px 0 0 #1d7a47; }
+
+/* FR-13: the single request the copyist may accept next — faint red highlight. */
+.table tbody tr.row-acceptable { background: #fdeaea; }
+.table tbody tr.row-acceptable:hover { background: #fbdcdc; }
+.table tbody tr.row-acceptable td:first-child { box-shadow: inset 3px 0 0 #c0392b; }
+
+/* FR-13: requests the copyist cannot accept yet — blurred + not openable. */
+.table tbody tr.row-locked td { filter: blur(3px); user-select: none; }
+.table tbody tr.row-locked { cursor: not-allowed; }
 
 /* Connection-status pill (auto-polling lists) */
 .connstatus { display: inline-flex; align-items: center; gap: 8px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--gray-line); background: var(--white); color: var(--ink); transition: background .15s ease, border-color .15s ease, color .15s ease; }

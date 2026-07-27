@@ -21,6 +21,8 @@ import { ParagraphsPage } from "../features/admin/ParagraphsPage";
 import { FormsPage } from "../features/admin/FormsPage";
 import { ReportsDashboardPage } from "../features/reports/ReportsDashboardPage";
 import { BatchPrintPage } from "../features/admin/BatchPrintPage";
+import { PrintQueuePage } from "../features/print/PrintQueuePage";
+import { useConfig } from "./useConfig";
 
 interface NavItem { page: string; ar: string; en: string; }
 
@@ -33,10 +35,12 @@ const navByRole: Record<Role, NavItem[]> = {
   ],
   Copyist: [
     { page: "requests", ar: "قائمة عملي", en: "My queue" },
+    { page: "copyist-print-queue", ar: "رتل الطباعة", en: "Print queue" },
     { page: "reports", ar: "تقاريري", en: "My reports" },
   ],
   Reviewer: [
     { page: "requests", ar: "قائمة المراجعة", en: "Review queue" },
+    { page: "reviewer-print-queue", ar: "رتل الطباعة", en: "Print queue" },
     { page: "reports", ar: "تقاريري", en: "My reports" },
   ],
   Administrator: [
@@ -73,6 +77,8 @@ function Outlet() {
     case "admin-paragraphs": return <ParagraphsPage />;
     case "admin-forms": return <FormsPage />;
     case "admin-batch-print": return <BatchPrintPage />;
+    case "reviewer-print-queue": return <PrintQueuePage mode="reviewer" />;
+    case "copyist-print-queue": return <PrintQueuePage mode="copyist" />;
     default: return <RequestsListPage />;
   }
 }
@@ -84,7 +90,12 @@ export function AppLayout() {
   const L = useL();
   if (!user) return null;
 
-  const items = navByRole[user.role] ?? [];
+  const cfg = useConfig();
+  const base = navByRole[user.role] ?? [];
+  // FR-15 item 4: the batch-print tab is available to the Registry Head when ALLOW_HEAD_BATCH_PRINT is on.
+  const items = user.role === "RegistryHead" && cfg?.allowHeadBatchPrint
+    ? [...base.slice(0, -1), { page: "admin-batch-print", ar: "طباعة دفعة", en: "Batch print" }, base[base.length - 1]]
+    : base;
   const roleName = roleLabels[user.role]?.[lang === "ar" ? "ar" : "en"] ?? user.role;
 
   return (

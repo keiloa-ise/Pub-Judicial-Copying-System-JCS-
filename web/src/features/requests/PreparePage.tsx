@@ -28,6 +28,10 @@ const PRESIDENT_REPLY_KEY = "presidentReplying";
 /** Field-values key: whether the PRESIDENT is a delegated (ندباً) judge from another room/court.
  *  Per-member delegation lives on each member object (PanelMember.delegated). */
 const PRESIDENT_DELEGATED_KEY = "presidentDelegated";
+/** Field-values keys: the PRESIDENT's delegation (ندب) date + decision number (per-member equivalents
+ *  live on each member object — PanelMember.delegationDate / delegationNumber). */
+const PRESIDENT_DELEGATION_DATE_KEY = "presidentDelegationDate";
+const PRESIDENT_DELEGATION_NUMBER_KEY = "presidentDelegationNumber";
 /** The fixed capacity (صفة) auto-assigned to a delegated judge — «ندباً» (locked when delegated). */
 const DELEGATION_TITLE = "ندباً";
 
@@ -98,7 +102,7 @@ function parseMembers(raw: string | undefined): PanelMember[] {
     return a.map((m) =>
       typeof m === "string"
         ? { judge: m, title: "", dissenting: false, replying: false, delegated: false }
-        : { judge: String(m?.judge ?? m?.name ?? ""), title: String(m?.title ?? ""), dissenting: Boolean(m?.dissenting), replying: Boolean(m?.replying), delegated: Boolean(m?.delegated) });
+        : { judge: String(m?.judge ?? m?.name ?? ""), title: String(m?.title ?? ""), dissenting: Boolean(m?.dissenting), replying: Boolean(m?.replying), delegated: Boolean(m?.delegated), delegationDate: String(m?.delegationDate ?? ""), delegationNumber: String(m?.delegationNumber ?? "") });
   } catch { return []; }
 }
 
@@ -335,6 +339,8 @@ export function PreparePage({ id }: { id: string }) {
     ...v,
     [PRESIDENT_DELEGATED_KEY]: on ? "true" : "false",
     [PRESIDENT_TITLE_KEY]: on ? DELEGATION_TITLE : "",
+    // Clear the delegation date/number when turning delegation off.
+    ...(on ? {} : { [PRESIDENT_DELEGATION_DATE_KEY]: "", [PRESIDENT_DELEGATION_NUMBER_KEY]: "" }),
     ...(presidentKey ? { [presidentKey]: "" } : {}),
   }));
 
@@ -369,6 +375,13 @@ export function PreparePage({ id }: { id: string }) {
           throw new Error(L("يجب اختيار صفة رئيس الهيئة.", "Select the president's title."));
         if (cleanMembers.some((m) => !m.title))
           throw new Error(L("يجب اختيار صفة لكل عضو في الهيئة.", "Select a title for every panel member."));
+        // ندب: a delegated judge must carry both the delegation date and the delegation decision number.
+        if (presidentDelegated && (!values[PRESIDENT_DELEGATION_DATE_KEY]?.trim() || !values[PRESIDENT_DELEGATION_NUMBER_KEY]?.trim()))
+          throw new Error(L("يجب إدخال تاريخ الندب ورقم قرار الندب لرئيس الهيئة المنتدب.",
+                            "Enter the delegation date and decision number for the delegated president."));
+        if (cleanMembers.some((m) => m.delegated && (!m.delegationDate?.trim() || !m.delegationNumber?.trim())))
+          throw new Error(L("يجب إدخال تاريخ الندب ورقم قرار الندب لكل عضو منتدب.",
+                            "Enter the delegation date and decision number for every delegated member."));
         // مخالفة: a dissent with no reason text is rejected (منع وإظهار خطأ).
         if (hasDissent && !dissentSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
           throw new Error(L("يجب كتابة سبب المخالفة في ملحق الرأي المخالف.",
@@ -481,10 +494,21 @@ export function PreparePage({ id }: { id: string }) {
                           title={L("قاضٍ منتدب من غرفة/محكمة أخرى (ندباً)", "Delegated judge from another room/court")}>
                           <input type="checkbox" checked={!!m.delegated}
                             onChange={(e) => setMembers(members.map((x, idx) => idx === i
-                              ? { ...x, delegated: e.target.checked, title: e.target.checked ? DELEGATION_TITLE : "", judge: "" }
+                              ? { ...x, delegated: e.target.checked, title: e.target.checked ? DELEGATION_TITLE : "", judge: "",
+                                  delegationDate: e.target.checked ? x.delegationDate : "", delegationNumber: e.target.checked ? x.delegationNumber : "" }
                               : x))} />
                           {L("منتدب", "Delegated")}
                         </label>
+                        {m.delegated && (
+                          <>
+                            <input type="date" style={{ width: 150 }} value={m.delegationDate ?? ""}
+                              title={L("تاريخ الندب", "Delegation date")}
+                              onChange={(e) => setMembers(members.map((x, idx) => idx === i ? { ...x, delegationDate: e.target.value } : x))} />
+                            <input style={{ width: 160 }} value={m.delegationNumber ?? ""}
+                              placeholder={L("رقم قرار الندب", "Delegation decision no.")}
+                              onChange={(e) => setMembers(members.map((x, idx) => idx === i ? { ...x, delegationNumber: e.target.value } : x))} />
+                          </>
+                        )}
                         <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
                           title={L("مخالف للقرار", "Dissents from the decision")}>
                           <input type="checkbox" checked={!!m.dissenting} disabled={!m.judge}
@@ -528,6 +552,16 @@ export function PreparePage({ id }: { id: string }) {
                           onChange={(e) => setPresidentDelegated(e.target.checked)} />
                         {L("منتدب", "Delegated")}
                       </label>
+                      {presidentDelegated && (
+                        <>
+                          <input type="date" style={{ width: 150 }} value={values[PRESIDENT_DELEGATION_DATE_KEY] ?? ""}
+                            title={L("تاريخ الندب", "Delegation date")}
+                            onChange={(e) => setValues((v) => ({ ...v, [PRESIDENT_DELEGATION_DATE_KEY]: e.target.value }))} />
+                          <input style={{ width: 160 }} value={values[PRESIDENT_DELEGATION_NUMBER_KEY] ?? ""}
+                            placeholder={L("رقم قرار الندب", "Delegation decision no.")}
+                            onChange={(e) => setValues((v) => ({ ...v, [PRESIDENT_DELEGATION_NUMBER_KEY]: e.target.value }))} />
+                        </>
+                      )}
                       <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
                         title={L("رئيس الغرفة مخالف للقرار", "Room president dissents")}>
                         <input type="checkbox" checked={presidentDissents} disabled={!values[fld.key]}

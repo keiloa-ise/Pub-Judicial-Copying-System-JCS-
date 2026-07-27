@@ -41,6 +41,9 @@ public class CopyRequest
     /// <summary>رقم طلب الاستعجال — required only when <see cref="Urgency"/> is مستعجل (Expedited).</summary>
     public string? ExpediteRequestNumber { get; private set; }
 
+    /// <summary>رقم طلب التصعيد / ملاحظة — an OPTIONAL note captured when escalating to موقوف (Suspended).</summary>
+    public string? SuspendRequestNumber { get; private set; }
+
     /// <summary>رقم المرجع — an optional external reference for متفرق copies (FR-06, BR-11).</summary>
     public string? ReferenceNumber { get; private set; }
 
@@ -181,13 +184,15 @@ public class CopyRequest
     }
 
     /// <summary>FR-06: a non-approved copy may be escalated to موقوف at any time (Registry Head).
-    /// This is the highest work-queue priority and does not require an expedite-request number.</summary>
-    public void EscalateToSuspended(DateTimeOffset nowUtc)
+    /// This is the highest work-queue priority; no expedite-request number is required, but an
+    /// OPTIONAL note (رقم طلب التصعيد / ملاحظة) may be captured.</summary>
+    public void EscalateToSuspended(string? note, DateTimeOffset nowUtc)
     {
         if (State == CopyState.Approved)
             throw new DomainException("لا يمكن تغيير حالة قرار معتمد.");
         Urgency = CaseUrgency.Suspended;
         ExpediteRequestNumber = null;
+        SuspendRequestNumber = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         UpdatedUtc = nowUtc;
     }
 

@@ -35,6 +35,15 @@ services:
       JCS_BOOTSTRAP: ${JCS_BOOTSTRAP:-false}
       JCS_ADMIN_USERNAME: ${JCS_ADMIN_USERNAME:-admin}
       JCS_ADMIN_PASSWORD: ${JCS_ADMIN_PASSWORD:-}
+      # Feature flags (read by the API). Override in .env.
+      #   PRINT_DELEGATION_INFO  (off)  → print a delegated (ندب) judge's date/number on the judgment PDF.
+      #   SHOW_APPROVED_IN_QUEUE (off)  → show Approved decisions in the Copyist's/Reviewer's «طلباتي» queue.
+      #   ALLOW_COPYIST_REPRINT  (on)   → individual reprint for Copyist + Registry Head (off = Head only).
+      #   ALLOW_HEAD_BATCH_PRINT (on)   → batch-print tab for Administrator + Registry Head (off = Admin only).
+      PRINT_DELEGATION_INFO: ${PRINT_DELEGATION_INFO:-false}
+      SHOW_APPROVED_IN_QUEUE: ${SHOW_APPROVED_IN_QUEUE:-false}
+      ALLOW_COPYIST_REPRINT: ${ALLOW_COPYIST_REPRINT:-true}
+      ALLOW_HEAD_BATCH_PRINT: ${ALLOW_HEAD_BATCH_PRINT:-true}
     depends_on:
       mssql:
         condition: service_healthy

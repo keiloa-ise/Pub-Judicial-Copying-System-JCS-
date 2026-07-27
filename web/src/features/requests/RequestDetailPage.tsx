@@ -24,6 +24,7 @@ function fmtDuration(ms: number): string {
 export function RequestDetailPage({ id }: { id: string }) {
   const { navigate } = useNav();
   const { user } = useAuth();
+  const cfg = useConfig();
   const { lang } = useI18n();
   const L = useL();
   const [detail, setDetail] = useState<CopyRequestDetail | null>(null);
@@ -49,7 +50,8 @@ export function RequestDetailPage({ id }: { id: string }) {
   }
 
   // FR-15: open the print page and (optionally) auto-fire the print on arrival — the sessionStorage
-  // flag is read by PrintCopyPage. Used by the «طباعة» button and by approval (auto-print, R2).
+  // flag is read by PrintCopyPage. Used by the individual «طباعة» button (reprint). Approval NO LONGER
+  // auto-prints — an approved decision goes to the reviewer's print queue instead (FR-15 item 1).
   function goPrint(auto: boolean) {
     if (auto) sessionStorage.setItem("jcs_autoprint_id", id);
     navigate("print", id);
@@ -118,6 +120,9 @@ export function RequestDetailPage({ id }: { id: string }) {
           <dt>{L("الحالة", "Status")}</dt><dd>{urgencyLabels[detail.urgency]?.[lang === "ar" ? "ar" : "en"] ?? detail.urgency}</dd>
           {detail.expediteRequestNumber && (
             <><dt>{L("رقم طلب الاستعجال", "Expedite request no.")}</dt><dd>{detail.expediteRequestNumber}</dd></>
+          )}
+          {detail.suspendRequestNumber && (
+            <><dt>{L("رقم طلب التصعيد", "Escalation request no.")}</dt><dd>{detail.suspendRequestNumber}</dd></>
           )}
           {detail.referenceNumber && (
             <><dt>{L("رقم المرجع", "Reference no.")}</dt><dd>{detail.referenceNumber}</dd></>
@@ -189,9 +194,12 @@ export function RequestDetailPage({ id }: { id: string }) {
         <button className="btn btn--gold" onClick={() => goPrint(false)}>
           {L("معاينة", "Preview")}
         </button>
-        <button className="btn btn--gold" disabled={busy} onClick={() => goPrint(true)}>
-          {L("طباعة (إعلام الحكم)", "Print (judgment notice)")}
-        </button>
+        {/* FR-15 item 3: individual reprint is hidden for the Copyist when ALLOW_COPYIST_REPRINT is off. */}
+        {!(user?.role === "Copyist" && cfg && !cfg.allowCopyistReprint) && (
+          <button className="btn btn--gold" disabled={busy} onClick={() => goPrint(true)}>
+            {L("طباعة (إعلام الحكم)", "Print (judgment notice)")}
+          </button>
+        )}
         {/* FR-07: the copyist must accept before editing. */}
         {isAssignedCopyist && detail.state === "InPreparation" && !detail.acceptedUtc && (
           <button className="btn btn--gold" disabled={busy} onClick={() => act(() => api.accept(detail.id))}>
@@ -210,15 +218,20 @@ export function RequestDetailPage({ id }: { id: string }) {
             if (no.trim()) act(() => api.expedite(detail.id, no.trim()));
           }}>{L("تصعيد إلى مستعجل", "Escalate to expedited")}</button>
         )}
-        {/* FR-06: Registry Head escalates a non-approved copy to موقوف. */}
+        {/* FR-06: Registry Head escalates a non-approved copy to موقوف (with an optional note). */}
         {user?.role === "RegistryHead" && detail.state !== "Approved" && detail.urgency !== "Suspended" && (
-          <button className="btn btn--ghost" disabled={busy} onClick={() => act(() => api.suspend(detail.id))}>
+          <button className="btn btn--ghost" disabled={busy} onClick={() => {
+            const note = window.prompt(L("رقم طلب التصعيد / ملاحظة (اختياري):", "Escalation request no. / note (optional):"));
+            if (note === null) return; // cancelled
+            act(() => api.suspend(detail.id, note.trim() || null));
+          }}>
             {L("تصعيد إلى موقوف", "Escalate to suspended")}
           </button>
         )}
         {user?.role === "Reviewer" && detail.state === "UnderReview" && (
           <>
-            <button className="btn" disabled={busy} onClick={approveAndPrint}>{L("اعتماد وطباعة", "Approve & print")}</button>
+            {/* FR-15 item 1: approval no longer auto-prints; the approved decision enters the reviewer print queue. */}
+            <button className="btn" disabled={busy} onClick={() => act(() => api.approve(detail.id))}>{L("اعتماد", "Approve")}</button>
             <button className="btn" disabled={busy} onClick={() => navigate("prepare", detail.id)}>{L("تصحيح مباشر", "Correct directly")}</button>
             <button className="btn btn--ghost" disabled={busy} onClick={() => {
               const c = window.prompt(L("سبب الإعادة للتصحيح:", "Corrections / reason for return:")) ?? "";

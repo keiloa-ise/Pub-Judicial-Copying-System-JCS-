@@ -80,6 +80,23 @@ public sealed record ReportSummaryDto(
 
 public sealed record Paged<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
+/// <summary>FR-13: one line of a judge's work log — a single decision the judge sat on (as president or
+/// member), within the reservation-date range, in any state. Panel membership + delegation are read from
+/// the copy's FieldValuesJson (the panel is stored there, not relationally).</summary>
+public sealed record JudgeWorkLogRow(
+    string JudgeName,
+    string? CopyNumber,
+    int? MiscNumber,
+    string? DecisionNumber,
+    string CourtName,
+    string RoomName,
+    DateOnly ReservationDate,
+    CopyState State,
+    string Role,               // "رئيس" | "عضو"
+    bool Delegated,
+    string? DelegationNumber,
+    string? DelegationDate);
+
 /// <summary>Tabular report kinds that can be exported (CSV/Excel).</summary>
 public enum ReportType
 {
@@ -89,6 +106,7 @@ public enum ReportType
     ByReviewer,
     ByHead,
     ByJudge,
+    JudgeWorkLog,
     Turnaround,
     Copies,
 }

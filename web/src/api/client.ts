@@ -53,6 +53,7 @@ export interface CopyRequestListItem {
 export interface LinkedMisc { id: string; miscNumber: number | null; referenceNumber: string | null; state: CopyState; reservationDate: string; }
 export interface CopyRequestDetail extends CopyRequestListItem {
   referenceNumber: string | null;
+  suspendRequestNumber: string | null; // FR-06: optional note captured on escalation to موقوف.
   formTemplateId: string | null; fieldValuesJson: string; sectionsJson: string; dissentSectionsJson: string; rebuttalSectionsJson: string; body: string; approvedUtc: string | null;
   originalCopyId: string | null; originalCopyNumber: string | null; linkedMisc: LinkedMisc[];
   printedUtc: string | null; // FR-15: set when printed in the current phase; blocks re-print of approved copies.
@@ -101,7 +102,7 @@ export interface Judge { id: string; name: string; isActive: boolean; roomIds: s
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
 /** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim). */
-export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; }
+export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; delegationDate?: string; delegationNumber?: string; }
 export interface ParagraphTemplate { id: string; title: string; body: string; isArchived: boolean; formTemplateId: string | null; }
 export interface FormField { id: string; key: string; label: string; type: string; validationRulesJson: string | null; order: number; }
 export interface FormTemplate { id: string; name: string; isActive: boolean; fields: FormField[]; }
@@ -132,7 +133,13 @@ export interface ReportSummary {
   acceptedCount: number; avgAcceptanceHours: number;
 }
 export interface Paged<T> { items: T[]; total: number; page: number; pageSize: number; }
-export type ReportExportType = "by-court" | "by-room" | "by-copyist" | "by-reviewer" | "by-head" | "by-judge" | "turnaround" | "copies";
+/** FR-13: one line of the per-judge work log — a decision the judge sat on, with role + delegation. */
+export interface JudgeWorkLogRow {
+  judgeName: string; copyNumber: string | null; miscNumber: number | null; decisionNumber: string | null;
+  courtName: string; roomName: string; reservationDate: string; state: CopyState; role: string;
+  delegated: boolean; delegationNumber: string | null; delegationDate: string | null;
+}
+export type ReportExportType = "by-court" | "by-room" | "by-copyist" | "by-reviewer" | "by-head" | "by-judge" | "judge-work-log" | "turnaround" | "copies";
 
 function reportParams(f: ReportFilter): URLSearchParams {
   const p = new URLSearchParams();
@@ -207,7 +214,8 @@ export const api = {
   accept: (id: string) => request<void>(`/api/copy-requests/${id}/accept`, { method: "POST" }),
   expedite: (id: string, expediteRequestNumber: string) =>
     request<void>(`/api/copy-requests/${id}/expedite`, { method: "POST", body: JSON.stringify({ expediteRequestNumber }) }),
-  suspend: (id: string) => request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST" }),
+  suspend: (id: string, note?: string | null) =>
+    request<void>(`/api/copy-requests/${id}/suspend`, { method: "POST", body: JSON.stringify({ note: note ?? null }) }),
   // BR-11: Approved عادي copies a متفرق can be based on.
   // BR-11: Approved originals for the متفرق picker — filtered server-side to a room (+ optional search),
   // capped server-side, so the payload stays small no matter how many approved copies exist.
@@ -260,10 +268,33 @@ export const api = {
     byReviewer: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-reviewer?${reportParams(f)}`),
     byHead: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-head?${reportParams(f)}`),
     byJudge: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-judge?${reportParams(f)}`),
+    judgeWorkLog: (f: ReportFilter) => request<JudgeWorkLogRow[]>(`/api/reports/judge-work-log?${reportParams(f)}`),
     turnaround: (f: ReportFilter) => request<TurnaroundReport>(`/api/reports/turnaround?${reportParams(f)}`),
     copies: (f: ReportFilter, page: number, pageSize: number) => {
       const p = reportParams(f); p.set("page", String(page)); p.set("pageSize", String(pageSize));
       return request<Paged<CopyRow>>(`/api/reports/copies?${p}`);
+    },
+  },
+
+  // ── Feature flags (server-authoritative; used to hide role-gated UI) ──
+  config: () => request<FeatureFlags>("/api/config"),
+
+  // ── FR-15 print queues ──
+  printQueue: {
+    reviewer: () => request<CopyRequestListItem[]>("/api/print-queue/reviewer"),
+    copyist: () => request<CopyRequestListItem[]>("/api/print-queue/copyist"),
+    // Marks the selected decisions printed and returns them as ONE merged PDF blob to print.
+    print: async (ids: string[]): Promise<Blob> => {
+      const res = await fetch(`${BASE}/api/print-queue/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(body.error ?? `Request failed (${res.status})`);
+      }
+      return res.blob();
     },
   },
 

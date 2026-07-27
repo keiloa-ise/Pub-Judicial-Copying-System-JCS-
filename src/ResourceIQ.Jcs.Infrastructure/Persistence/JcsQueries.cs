@@ -84,7 +84,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             cr2.Id, cr2.CopyNumber, cr2.State, cr2.CourtId, row.CourtName,
             cr2.RoomId, row.RoomName,
             cr2.CaseBaseNumber, cr2.CaseFilingDate, cr2.ReservationDate,
-            cr2.Category, cr2.Urgency, cr2.ExpediteRequestNumber, cr2.ReferenceNumber, cr2.MiscNumber,
+            cr2.Category, cr2.Urgency, cr2.ExpediteRequestNumber, cr2.SuspendRequestNumber, cr2.ReferenceNumber, cr2.MiscNumber,
             cr2.AssignedCopyistId, row.CopyistName,
             cr2.Content != null ? cr2.Content.FormTemplateId : null,
             cr2.Content != null ? cr2.Content.FieldValuesJson : "{}",
@@ -159,6 +159,41 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
 
         return new DeletionTargetsDto(normals, miscs);
     }
+
+    public Task<IReadOnlyList<CopyRequestListItem>> ListReviewerPrintQueueAsync(IReadOnlyCollection<Guid> courtIds, CancellationToken ct)
+    {
+        var ids = courtIds.ToArray();
+        var q = db.CopyRequests.AsNoTracking()
+            .Where(cr => ids.Contains(cr.CourtId) && cr.State == CopyState.Approved && cr.PrintedUtc == null);
+        return PrintQueueProjectionAsync(q, ct);
+    }
+
+    public Task<IReadOnlyList<CopyRequestListItem>> ListCopyistPrintQueueAsync(Guid copyistId, CancellationToken ct)
+    {
+        var q = db.CopyRequests.AsNoTracking()
+            .Where(cr => cr.AssignedCopyistId == copyistId && cr.State == CopyState.InPreparation
+                         && cr.AcceptedUtc != null && cr.PrintedUtc == null);
+        return PrintQueueProjectionAsync(q, ct);
+    }
+
+    // Shared projection + priority ordering (موقوف > مستعجل > عادي, then oldest-first) for the print queues.
+    private async Task<IReadOnlyList<CopyRequestListItem>> PrintQueueProjectionAsync(IQueryable<CopyRequest> q, CancellationToken ct) =>
+        await (from cr in q
+               join c in db.Courts on cr.CourtId equals c.Id
+               join rm in db.Rooms on cr.RoomId equals rm.Id
+               join uu in db.Users on cr.AssignedCopyistId equals uu.Id into uj
+               from u in uj.DefaultIfEmpty()
+               select new { cr, CourtName = c.Name, RoomName = rm.Name, CopyistName = (string?)(u != null ? u.DisplayName : null) })
+            .OrderByDescending(x => x.cr.Urgency == CaseUrgency.Suspended)
+            .ThenByDescending(x => x.cr.Urgency == CaseUrgency.Expedited)
+            .ThenBy(x => x.cr.CreatedUtc)
+            .Select(x => new CopyRequestListItem(
+                x.cr.Id, x.cr.CopyNumber, x.cr.State, x.cr.CourtId, x.CourtName,
+                x.cr.RoomId, x.RoomName,
+                x.cr.CaseBaseNumber, x.cr.CaseFilingDate, x.cr.ReservationDate,
+                x.cr.Category, x.cr.Urgency, x.cr.ExpediteRequestNumber, x.cr.MiscNumber,
+                x.cr.AssignedCopyistId, x.CopyistName, x.cr.CreatedUtc, x.cr.AcceptedUtc))
+            .ToListAsync(ct);
 
     public async Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(
         IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct)

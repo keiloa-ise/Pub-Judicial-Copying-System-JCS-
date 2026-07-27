@@ -22,11 +22,18 @@ public sealed class CopyRequestReadService(
     {
         Guard.RequireAuthenticated(currentUser);
 
-        // States: an explicit search state wins; otherwise the reviewer keeps a UnderReview queue.
-        IReadOnlyCollection<CopyState>? states =
-            search.State is { } s ? [s]
-            : currentUser.Role == Role.Reviewer ? [CopyState.UnderReview]
-            : null;
+        // FR-13: an explicit search state wins. Otherwise the reviewer's queue is UnderReview and the
+        // copyist sees their own copies — but Approved copies appear in the copyist/reviewer queue ONLY
+        // when SHOW_APPROVED_IN_QUEUE is true (env flag), to keep the working queue focused (default off).
+        var showApproved = string.Equals(
+            Environment.GetEnvironmentVariable("SHOW_APPROVED_IN_QUEUE"), "true", StringComparison.OrdinalIgnoreCase);
+        IReadOnlyCollection<CopyState>? states;
+        if (search.State is { } s) states = [s];
+        else if (currentUser.Role == Role.Reviewer)
+            states = showApproved ? [CopyState.UnderReview, CopyState.Approved] : [CopyState.UnderReview];
+        else if (currentUser.Role == Role.Copyist && !showApproved)
+            states = [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];
+        else states = null;
 
         // Court scope (BR-06). null => no court restriction (Administrator only). A non-null
         // (possibly empty) list restricts to those courts — an empty list matches nothing.
@@ -94,14 +101,31 @@ public sealed class CopyRequestReadService(
         return queries.ListSelectableOriginalsAsync(currentUser.CourtIds, roomId, search, OriginalsPageSize, ct);
     }
 
-    /// <summary>FR-15 batch print (Administrator only): the copies in a court+room whose تاريخ الحجز
-    /// falls within [from, to], of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state).
-    /// A read-only administrative export: NOT subject to the single-print order/once rules and it never
-    /// marks copies as printed. Ordering follows the same priority as the work queue.</summary>
+    /// <summary>Feature flag: batch print is available to the Registry Head (in addition to the
+    /// Administrator) when ALLOW_HEAD_BATCH_PRINT is true (default true, read from .env).</summary>
+    private static bool AllowHeadBatchPrint =>
+        !string.Equals(Environment.GetEnvironmentVariable("ALLOW_HEAD_BATCH_PRINT"), "false", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>FR-15 batch print: the copies in a court+room whose تاريخ الحجز falls within [from, to],
+    /// of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state). Available to the
+    /// Administrator, and to the Registry Head (their courts) when ALLOW_HEAD_BATCH_PRINT is on.
+    /// A read-only administrative export: NOT subject to the single-print order/once rules; never marks printed.</summary>
     public Task<IReadOnlyList<CopyRequestListItem>> ListBatchPrintAsync(
         Guid courtId, Guid roomId, DateOnly from, DateOnly to, bool approved, CancellationToken ct)
     {
-        Guard.RequireRole(currentUser, Role.Administrator);
+        if (currentUser.Role == Role.Administrator)
+        {
+            // unrestricted
+        }
+        else if (currentUser.Role == Role.RegistryHead && AllowHeadBatchPrint)
+        {
+            Guard.RequireAssignedCourt(currentUser, courtId); // BR-06: only their own courts
+        }
+        else
+        {
+            throw new ForbiddenException("Not permitted to batch-print.");
+        }
+
         IReadOnlyCollection<CopyState> states = approved
             ? [CopyState.Approved]
             : [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];

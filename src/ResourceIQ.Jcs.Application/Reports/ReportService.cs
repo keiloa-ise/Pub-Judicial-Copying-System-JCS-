@@ -39,6 +39,9 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
     public Task<IReadOnlyList<CountRow>> ByJudgeAsync(ReportFilter filter, CancellationToken ct) =>
         queries.CountByJudgeAsync(Scope(), Safe(filter), ct);
 
+    public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportFilter filter, CancellationToken ct) =>
+        queries.JudgeWorkLogAsync(Scope(), Safe(filter), ct);
+
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportFilter filter, CancellationToken ct) =>
         queries.TurnaroundAsync(Scope(), Safe(filter), ct);
 
@@ -91,6 +94,8 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
                 return CountTable("تقرير النسخ حسب رئيس الديوان", "رئيس الديوان", await ByHeadAsync(filter, ct));
             case ReportType.ByJudge:
                 return CountTable("تقرير النسخ حسب القاضي (تقريبي)", "القاضي", await ByJudgeAsync(filter, ct));
+            case ReportType.JudgeWorkLog:
+                return JudgeWorkLogTable(await JudgeWorkLogAsync(filter, ct));
             case ReportType.Turnaround:
                 return TurnaroundTable(await TurnaroundAsync(filter, ct));
             case ReportType.Copies:
@@ -152,6 +157,27 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
             r.TurnaroundHours?.ToString("0.0", CultureInfo.InvariantCulture) ?? "",
         }).ToList();
         return new ReportTable("تقرير النسخ", headers, data);
+    }
+
+    private static ReportTable JudgeWorkLogTable(IReadOnlyList<JudgeWorkLogRow> rows)
+    {
+        var headers = new[]
+        {
+            "القاضي", "الدور", "رقم النسخة/المتفرق", "رقم القرار", "المحكمة", "الغرفة",
+            "تاريخ الحجز", "الحالة", "منتدب", "رقم الندب", "تاريخ الندب",
+        };
+        var data = rows.Select(r => (IReadOnlyList<string>)new[]
+        {
+            r.JudgeName, r.Role,
+            r.CopyNumber ?? (r.MiscNumber is { } m ? $"متفرق {m}" : ""),
+            r.DecisionNumber ?? "",
+            r.CourtName, r.RoomName,
+            r.ReservationDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            StateLabel(r.State),
+            r.Delegated ? "نعم" : "لا",
+            r.DelegationNumber ?? "", r.DelegationDate ?? "",
+        }).ToList();
+        return new ReportTable("سجل أعمال القضاة", headers, data);
     }
 
     public static string StateLabel(CopyState s) => s switch

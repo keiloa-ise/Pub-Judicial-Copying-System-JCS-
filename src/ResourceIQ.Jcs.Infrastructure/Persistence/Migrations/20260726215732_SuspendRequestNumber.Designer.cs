@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ResourceIQ.Jcs.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using ResourceIQ.Jcs.Infrastructure.Persistence;
 namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JcsDbContext))]
-    partial class JcsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260726215732_SuspendRequestNumber")]
+    partial class SuspendRequestNumber
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -313,56 +316,6 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                     b.HasIndex("FormTemplateId");
 
                     b.ToTable("FormFields");
-                });
-
-            modelBuilder.Entity("ResourceIQ.Jcs.Domain.Entities.FormDraft", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("CopyRequestId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("FormKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTimeOffset?>("LastSyncedUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("PayloadJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTimeOffset>("UpdatedUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CopyRequestId");
-
-                    b.HasIndex("UpdatedUtc");
-
-                    b.HasIndex("UserId", "FormKey")
-                        .IsUnique();
-
-                    b.ToTable("FormDrafts", t =>
-                        {
-                            t.HasCheckConstraint("CK_FormDrafts_PayloadJson_MaxLength", "DATALENGTH([PayloadJson]) <= 524288");
-                        });
                 });
 
             modelBuilder.Entity("ResourceIQ.Jcs.Domain.Entities.FormTemplate", b =>

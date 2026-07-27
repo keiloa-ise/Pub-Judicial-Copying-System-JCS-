@@ -136,6 +136,10 @@ internal sealed class FakeQueries : IJcsQueries
         => Task.FromResult(new DeletionTargetsDto([], []));
     public Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(IReadOnlyCollection<Guid>? courtIds, Guid roomId, string? search, int limit, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<OriginalCopyOption>>([]);
+    public Task<IReadOnlyList<CopyRequestListItem>> ListReviewerPrintQueueAsync(IReadOnlyCollection<Guid> courtIds, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CopyRequestListItem>>([]);
+    public Task<IReadOnlyList<CopyRequestListItem>> ListCopyistPrintQueueAsync(Guid copyistId, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CopyRequestListItem>>([]);
     public Task<IReadOnlyList<CopyNumberCounterDto>> ListCopyNumberCountersAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CopyNumberCounterDto>>([]);
     public Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct)
@@ -180,6 +184,8 @@ internal sealed class FakeReportQueries : IReportQueries
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
     public Task<IReadOnlyList<CountRow>> CountByJudgeAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
+    public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
+        Task.FromResult(Capture<IReadOnlyList<JudgeWorkLogRow>>(scope, filter, []));
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture(scope, filter, new TurnaroundReportDto([], [])));
     public Task<Paged<CopyRowDto>> CopiesAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct) =>

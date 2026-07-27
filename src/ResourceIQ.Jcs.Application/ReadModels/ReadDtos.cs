@@ -39,6 +39,7 @@ public sealed record CopyRequestDetail(
     CaseCategory Category,
     CaseUrgency Urgency,
     string? ExpediteRequestNumber,
+    string? SuspendRequestNumber,
     string? ReferenceNumber,
     int? MiscNumber,
     Guid? AssignedCopyistId,
