@@ -149,6 +149,7 @@ else
 }
 
 var formDraftCleanupOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FormDraftCleanupOptions>>().Value;
+var formDraftCleanupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("FormDraftCleanup");
 if (formDraftCleanupOptions.Enabled)
 {
     RecurringJob.AddOrUpdate<FormDraftCleanupJob>(
@@ -157,7 +158,7 @@ if (formDraftCleanupOptions.Enabled)
         formDraftCleanupOptions.Cron,
         new RecurringJobOptions
         {
-            TimeZone = ResolveTimeZone(formDraftCleanupOptions.TimeZoneId)
+            TimeZone = ResolveTimeZone(formDraftCleanupOptions.TimeZoneId, formDraftCleanupLogger)
         });
 }
 else
@@ -183,11 +184,21 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 
 app.Run();
 
-static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+static TimeZoneInfo ResolveTimeZone(string? timeZoneId, ILogger logger)
 {
     if (string.IsNullOrWhiteSpace(timeZoneId) ||
         timeZoneId.Equals("UTC", StringComparison.OrdinalIgnoreCase))
         return TimeZoneInfo.Utc;
 
-    return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+    try
+    {
+        return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+    }
+    catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+    {
+        logger.LogWarning(ex,
+            "Form draft cleanup timezone '{TimeZoneId}' is invalid. Falling back to UTC.",
+            timeZoneId);
+        return TimeZoneInfo.Utc;
+    }
 }

@@ -139,6 +139,9 @@ Stale server drafts are cleaned by Hangfire using `FormDraftCleanup` settings:
 
 By default this removes server drafts older than 30 days once per day at 03:00 UTC.
 
+Server draft payloads are capped at `256 * 1024` JSON characters. The application rejects oversized
+payloads before parsing, and the database also has a `FormDrafts.PayloadJson` check constraint.
+
 ## Draft Identity
 
 Every draft is scoped by:
@@ -350,6 +353,9 @@ Important indexes:
 - index on `UpdatedUtc`
 
 The `UpdatedUtc` index supports the admin cleanup operation.
+
+`PayloadJson` remains `nvarchar(max)` so legal drafts can exceed SQL Server's `nvarchar(4000)` limit,
+but it is bounded by `CK_FormDrafts_PayloadJson_MaxLength`.
 
 ## Why There Are Two Migration Files
 

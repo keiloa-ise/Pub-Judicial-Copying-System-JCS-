@@ -186,6 +186,9 @@ public sealed class FormDraftConfiguration : IEntityTypeConfiguration<FormDraft>
 {
     public void Configure(EntityTypeBuilder<FormDraft> b)
     {
+        b.ToTable(tb => tb.HasCheckConstraint(
+            "CK_FormDrafts_PayloadJson_MaxLength",
+            $"DATALENGTH([PayloadJson]) <= {FormDraft.MaxPayloadJsonBytes}"));
         b.HasKey(x => x.Id);
         b.Property(x => x.Role).HasMaxLength(50).IsRequired();
         b.Property(x => x.FormKey).HasMaxLength(200).IsRequired();

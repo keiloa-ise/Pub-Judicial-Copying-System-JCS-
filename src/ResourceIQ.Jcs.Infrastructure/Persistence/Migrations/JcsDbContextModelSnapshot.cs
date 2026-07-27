@@ -356,7 +356,10 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId", "FormKey")
                         .IsUnique();
 
-                    b.ToTable("FormDrafts");
+                    b.ToTable("FormDrafts", t =>
+                        {
+                            t.HasCheckConstraint("CK_FormDrafts_PayloadJson_MaxLength", "DATALENGTH([PayloadJson]) <= 524288");
+                        });
                 });
 
             modelBuilder.Entity("ResourceIQ.Jcs.Domain.Entities.FormTemplate", b =>

@@ -28,6 +28,7 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_FormDrafts", x => x.Id);
+                    table.CheckConstraint("CK_FormDrafts_PayloadJson_MaxLength", "DATALENGTH([PayloadJson]) <= 524288");
                 });
 
             migrationBuilder.CreateIndex(

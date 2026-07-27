@@ -2,6 +2,7 @@ using ResourceIQ.Jcs.Application.Common;
 using ResourceIQ.Jcs.Application.FormDrafts;
 using ResourceIQ.Jcs.Domain.Entities;
 using ResourceIQ.Jcs.Domain.Enums;
+using ResourceIQ.Jcs.Domain.Rules;
 
 namespace ResourceIQ.Jcs.Tests;
 
@@ -36,6 +37,33 @@ public class FormDraftServiceTests
 
         await svc.DeleteAsync(key, CancellationToken.None);
         Assert.Null(await svc.GetAsync(key, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task User_cannot_save_an_oversized_form_draft()
+    {
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        var svc = CreateService(user);
+        var oversizedPayload = new string(' ', FormDraft.MaxPayloadJsonLength + 1);
+
+        await Assert.ThrowsAsync<DomainException>(() => svc.UpsertAsync(new UpsertFormDraftCommand(
+            "registry-head:create-copy-request:user",
+            oversizedPayload,
+            Now,
+            null), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task User_cannot_save_a_blank_form_draft_payload()
+    {
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        var svc = CreateService(user);
+
+        await Assert.ThrowsAsync<DomainException>(() => svc.UpsertAsync(new UpsertFormDraftCommand(
+            "registry-head:create-copy-request:user",
+            "   ",
+            Now,
+            null), CancellationToken.None));
     }
 
     [Fact]

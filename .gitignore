@@ -17,3 +17,9 @@ web/.env
 
 # Local NuGet workaround (large QuestPDF nupkg) — keep folder, ignore packages
 local-nuget/*.nupkg
+
+# Local run logs
+api.err.log
+api.out.log
+web.err.log
+web.out.log

@@ -8,6 +8,9 @@ namespace ResourceIQ.Jcs.Domain.Entities;
 /// </summary>
 public class FormDraft
 {
+    public const int MaxPayloadJsonLength = 256 * 1024;
+    public const int MaxPayloadJsonBytes = MaxPayloadJsonLength * 2;
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; private set; }
     public string Role { get; private set; } = string.Empty;
@@ -51,6 +54,8 @@ public class FormDraft
         if (string.IsNullOrWhiteSpace(formKey)) throw new DomainException("Form key is required.");
         if (formKey.Length > 200) throw new DomainException("Form key cannot exceed 200 characters.");
         if (string.IsNullOrWhiteSpace(payloadJson)) throw new DomainException("Draft payload is required.");
+        if (payloadJson.Length > MaxPayloadJsonLength)
+            throw new DomainException("Draft payload is too large.");
 
         Role = role.Trim();
         FormKey = formKey.Trim();

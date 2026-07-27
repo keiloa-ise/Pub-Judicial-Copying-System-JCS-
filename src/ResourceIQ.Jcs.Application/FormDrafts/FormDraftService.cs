@@ -140,6 +140,11 @@ public sealed class FormDraftService(
 
     private static void ValidatePayload(string payloadJson)
     {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            throw new DomainException("Draft payload is required.");
+        if (payloadJson.Length > FormDraft.MaxPayloadJsonLength)
+            throw new DomainException("Draft payload is too large.");
+
         try { using var _ = JsonDocument.Parse(payloadJson); }
         catch (JsonException) { throw new DomainException("Draft payload must be valid JSON."); }
     }
