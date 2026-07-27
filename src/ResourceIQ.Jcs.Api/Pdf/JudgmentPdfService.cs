@@ -34,7 +34,7 @@ public sealed class JudgmentPdfService
         var asm = typeof(JudgmentPdfService).Assembly;
         using (var reg = Resource(asm, "ResourceIQ.Jcs.Api.Assets.Fonts.Amiri-Regular.ttf")) FontManager.RegisterFont(reg);
         using (var bold = Resource(asm, "ResourceIQ.Jcs.Api.Assets.Fonts.Amiri-Bold.ttf")) FontManager.RegisterFont(bold);
-        LogoFaint = ReadAll(asm, "ResourceIQ.Jcs.Api.Assets.logo-faint.png");
+        LogoFaint = ReadAll(asm, "ResourceIQ.Jcs.Api.Assets.OIP-removebg-preview.png");
     }
 
     public byte[] Render(CopyRequestDetail d)
@@ -69,13 +69,14 @@ public sealed class JudgmentPdfService
             doc.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(16, Unit.Millimetre);
+                page.Margin(12, Unit.Millimetre);
                 page.DefaultTextStyle(t => t.FontFamily(Font).FontSize(12).LineHeight(1.5f).DirectionFromRightToLeft());
 
                 page.Background().Element(bg => Background(bg, draft));
 
                 page.Header().ContentFromRightToLeft().Element(c => Header(c, d, qr, G, year, draft));
                 page.Content().ContentFromRightToLeft().Element(c => Body(c, d, G, members, sections, dissentSections, rebuttalSections));
+                page.Footer().PaddingBottom(2, Unit.Millimetre).AlignCenter().Text(t => t.CurrentPageNumber());
             });
         }).GeneratePdf();
     }
@@ -83,18 +84,31 @@ public sealed class JudgmentPdfService
     // ── Header (repeats on every printed page) ──
     private static void Header(IContainer c, CopyRequestDetail d, byte[] qr, Func<string, string> G, string year, bool draft)
     {
-        c.Column(col =>
+        c.PaddingHorizontal(3, Unit.Millimetre).PaddingTop(3, Unit.Millimetre).Column(col =>
         {
-            // الصحيفة N — top-right corner, above everything else, matching the official template.
-            // CurrentPageNumber() is QuestPDF's built-in per-page field, so it updates automatically.
-            col.Item().AlignRight().Text(t =>
-            {
-                t.Span("الصحيفة: ");
-                t.CurrentPageNumber();
-            });
-
+            // One row, three plain columns — right/center/left under RTL row ordering. The row's own
+            // height comes naturally from its tallest column (the QR), so everything here finishes
+            // before the meta bar begins; no Layers, no Offset, no Unconstrained needed anywhere.
             col.Item().Row(row =>
             {
+                // الصحيفة N — right column. CurrentPageNumber() updates automatically per page.
+                row.ConstantItem(96).AlignRight().Text(t =>
+                {
+                    t.Span("الصحيفة: ");
+                    t.CurrentPageNumber();
+                });
+
+                // Court title + إعلام الحكم — center column.
+                row.RelativeItem().AlignMiddle().Column(t =>
+                {
+                    t.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(d.CourtName) ? "محكمة النقض" : d.CourtName).Bold().FontSize(17);
+                    t.Item().AlignCenter().Text("إعلام الحكم").Bold().FontSize(11);
+                    // BR-11: a متفرق is based on an original copy — show the link.
+                    if (!string.IsNullOrWhiteSpace(d.OriginalCopyNumber))
+                        t.Item().AlignCenter().Text($"قرار متفرق — مستند إلى النسخة: {d.OriginalCopyNumber}").FontSize(9);
+                });
+
+                // QR image + copy number — left column.
                 row.ConstantItem(96).Column(q =>
                 {
                     if (!draft)
@@ -109,29 +123,15 @@ public sealed class JudgmentPdfService
                         d.MiscNumber is { } mm ? $"رقم المتفرق: {mm}" : "—"
                     ).FontSize(8);
                 });
-                row.RelativeItem().AlignMiddle().Column(t =>
-                {
-                    t.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(d.CourtName) ? "محكمة النقض" : d.CourtName).Bold().FontSize(17);
-                    t.Item().AlignCenter().Text("إعلام الحكم").Bold().FontSize(11);
-                    // BR-11: a متفرق is based on an original copy — show the link.
-                    if (!string.IsNullOrWhiteSpace(d.OriginalCopyNumber))
-                        t.Item().AlignCenter().Text($"قرار متفرق — مستند إلى النسخة: {d.OriginalCopyNumber}").FontSize(9);
-                });
-                row.ConstantItem(96); // balances the QR so the title stays centred
             });
 
-            // Meta bar: رقم الأساس / رقم القرار / لعام — matches the official three-cell layout,
-            // right-to-left, divided by vertical rules. رقم المتفرق stays visible under the QR above
-            // (unchanged) rather than duplicated here, since the official layout has no fourth cell.
-            col.Item().PaddingTop(8).BorderTop(1).BorderColor(Colors.Black)
+            // Meta bar: رقم الأساس / رقم القرار / لعام — bordered rectangle below the row above. The QR
+            // belongs to the row above only; it has no relationship to this container at all.
+            col.Item().PaddingTop(6).Border(1).BorderColor(Colors.Black)
                 .PaddingVertical(6).Row(m =>
                 {
                     m.RelativeItem().Text($"رقم الأساس: {Dash(d.CaseBaseNumber)}").Bold();
-                    // Fixed height, not Extend() — Extend() requests unbounded space, which conflicts
-                    // with page.Header() sizing itself FROM this same content (DocumentLayoutException).
-                    m.ConstantItem(1).Height(18).Background(Colors.Black);
                     m.RelativeItem().AlignCenter().Text($"رقم القرار: {Dash(G("decisionNumber"))}").Bold();
-                    m.ConstantItem(1).Height(18).Background(Colors.Black);
                     m.RelativeItem().AlignLeft().Text($"لعام: {Dash(year)}").Bold();
                 });
         });
@@ -144,7 +144,13 @@ public sealed class JudgmentPdfService
         IReadOnlyList<(string Title, string Text)> dissentSections,
         IReadOnlyList<(string Title, string Text)> rebuttalSections)
     {
-        c.PaddingTop(12).Column(col =>
+        // Extend() claims the full Content slot QuestPDF leaves between the header and the footer on
+        // every page, so the border below starts right after the header and ends right above the
+        // footer — driven by the page layout itself, not a hardcoded offset. The outer 3mm inset here
+        // is the same PaddingHorizontal(3mm) the header uses for the meta bar, so the border's left and
+        // right edges land exactly on the meta bar's edges, not a separately guessed value.
+        c.PaddingHorizontal(3, Unit.Millimetre).Extend().Border(1).BorderColor(Colors.Black)
+            .PaddingHorizontal(0.5f, Unit.Millimetre).PaddingTop(12).PaddingBottom(0.5f, Unit.Millimetre).Column(col =>
         {
             col.Spacing(10);
 
@@ -295,7 +301,7 @@ public sealed class JudgmentPdfService
         {
             layers.PrimaryLayer().AlignCenter().AlignMiddle();
             if (!draft)
-                layers.Layer().AlignCenter().AlignMiddle().Width(115, Unit.Millimetre).Image(LogoFaint);
+                layers.Layer().AlignCenter().AlignMiddle().Width(205, Unit.Millimetre).Image(LogoFaint);
 
             if (draft)
                 layers.Layer().Element(DraftWatermark);

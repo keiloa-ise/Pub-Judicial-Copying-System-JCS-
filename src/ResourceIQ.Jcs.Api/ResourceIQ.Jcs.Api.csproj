@@ -24,7 +24,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\Fonts\Amiri-Regular.ttf" />
     <EmbeddedResource Include="Assets\Fonts\Amiri-Bold.ttf" />
-    <EmbeddedResource Include="Assets\logo-faint.png" />
+    <EmbeddedResource Include="Assets\OIP-removebg-preview.png" />
   </ItemGroup>
 
   <ItemGroup>
