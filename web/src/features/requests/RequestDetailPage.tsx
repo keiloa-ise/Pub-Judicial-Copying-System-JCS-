@@ -50,17 +50,11 @@ export function RequestDetailPage({ id }: { id: string }) {
   }
 
   // FR-15: open the print page and (optionally) auto-fire the print on arrival — the sessionStorage
-  // flag is read by PrintCopyPage. Used by the «طباعة» button and by approval (auto-print, R2).
+  // flag is read by PrintCopyPage. Used by the individual «طباعة» button (reprint). Approval NO LONGER
+  // auto-prints — an approved decision goes to the reviewer's print queue instead (FR-15 item 1).
   function goPrint(auto: boolean) {
     if (auto) sessionStorage.setItem("jcs_autoprint_id", id);
     navigate("print", id);
-  }
-
-  // FR-11 → FR-15 R2: approve, then auto-print the newly-approved copy.
-  async function approveAndPrint() {
-    setBusy(true); setErr(null);
-    try { await api.approve(id); goPrint(true); }
-    catch (e) { setErr((e as Error).message); setBusy(false); }
   }
 
   if (err && !detail) return <ErrorBox message={err} />;
@@ -222,7 +216,8 @@ export function RequestDetailPage({ id }: { id: string }) {
         )}
         {user?.role === "Reviewer" && detail.state === "UnderReview" && (
           <>
-            <button className="btn" disabled={busy} onClick={approveAndPrint}>{L("اعتماد وطباعة", "Approve & print")}</button>
+            {/* FR-15 item 1: approval no longer auto-prints; the approved decision enters the reviewer print queue. */}
+            <button className="btn" disabled={busy} onClick={() => act(() => api.approve(detail.id))}>{L("اعتماد", "Approve")}</button>
             <button className="btn" disabled={busy} onClick={() => navigate("prepare", detail.id)}>{L("تصحيح مباشر", "Correct directly")}</button>
             <button className="btn btn--ghost" disabled={busy} onClick={() => {
               const c = window.prompt(L("سبب الإعادة للتصحيح:", "Corrections / reason for return:")) ?? "";

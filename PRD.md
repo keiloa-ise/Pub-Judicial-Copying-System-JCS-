@@ -280,10 +280,11 @@ The copy can be printed as the official "إعلام الحكم" document.
 #### Print policy
 - **Ordered printing (R1):** a decision's FIRST print follows priority + sequence — **موقوف > مستعجل >
   عادي**, then oldest-first — within its court and its queue (approved vs non-approved, ordered
-  independently). **Auto-print on approval (R2):** approving a copy opens its print automatically.
-  **Re-print (R3):** after the first print an approved copy may be viewed and **re-printed at any time**
-  (no unlock/re-approval needed). Preview (`GET /pdf`) is read-only and never marks a copy printed;
-  printing (`POST /print`) is the controlled action (records the print, audited as `Print`).
+  independently). **On approval, a decision is NOT auto-printed** — it enters the **reviewer print queue**
+  (see below) from which the reviewer prints it. **Re-print (R3):** after its first print an approved copy
+  may be viewed and **re-printed at any time** (no unlock/re-approval needed). Preview (`GET /pdf`) is
+  read-only and never marks a copy printed; printing (`POST /print`) is the controlled action (records
+  the print, audited as `Print`).
 - **Batch print — Administrator (FR-15/BR):** between two **تاريخ الحجز** dates for a specific court+room,
   of one kind (مثبتة/مسودة); **each decision is rendered to its own PDF** and delivered as a **ZIP**.
   Read-only export — not subject to the order/once rules and never marks copies printed.
