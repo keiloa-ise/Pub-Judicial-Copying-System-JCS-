@@ -157,6 +157,8 @@ internal sealed class FakeReportQueries : IReportQueries
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
     public Task<IReadOnlyList<CountRow>> CountByJudgeAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
+    public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
+        Task.FromResult(Capture<IReadOnlyList<JudgeWorkLogRow>>(scope, filter, []));
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture(scope, filter, new TurnaroundReportDto([], [])));
     public Task<Paged<CopyRowDto>> CopiesAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct) =>

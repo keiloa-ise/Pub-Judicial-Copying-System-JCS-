@@ -125,7 +125,13 @@ export interface ReportSummary {
   acceptedCount: number; avgAcceptanceHours: number;
 }
 export interface Paged<T> { items: T[]; total: number; page: number; pageSize: number; }
-export type ReportExportType = "by-court" | "by-room" | "by-copyist" | "by-reviewer" | "by-head" | "by-judge" | "turnaround" | "copies";
+/** FR-13: one line of the per-judge work log — a decision the judge sat on, with role + delegation. */
+export interface JudgeWorkLogRow {
+  judgeName: string; copyNumber: string | null; miscNumber: number | null; decisionNumber: string | null;
+  courtName: string; roomName: string; reservationDate: string; state: CopyState; role: string;
+  delegated: boolean; delegationNumber: string | null; delegationDate: string | null;
+}
+export type ReportExportType = "by-court" | "by-room" | "by-copyist" | "by-reviewer" | "by-head" | "by-judge" | "judge-work-log" | "turnaround" | "copies";
 
 function reportParams(f: ReportFilter): URLSearchParams {
   const p = new URLSearchParams();
@@ -246,6 +252,7 @@ export const api = {
     byReviewer: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-reviewer?${reportParams(f)}`),
     byHead: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-head?${reportParams(f)}`),
     byJudge: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-judge?${reportParams(f)}`),
+    judgeWorkLog: (f: ReportFilter) => request<JudgeWorkLogRow[]>(`/api/reports/judge-work-log?${reportParams(f)}`),
     turnaround: (f: ReportFilter) => request<TurnaroundReport>(`/api/reports/turnaround?${reportParams(f)}`),
     copies: (f: ReportFilter, page: number, pageSize: number) => {
       const p = reportParams(f); p.set("page", String(page)); p.set("pageSize", String(pageSize));

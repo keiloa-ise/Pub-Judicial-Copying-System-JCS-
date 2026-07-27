@@ -44,6 +44,11 @@ public sealed class ReportsController(ReportService reports, IReportExporter exp
     public async Task<IActionResult> ByJudge([FromQuery] ReportFilter filter, CancellationToken ct) =>
         Ok(await reports.ByJudgeAsync(filter, ct));
 
+    /// <summary>FR-13: per-judge work log between two reservation dates (row per decision, any state).</summary>
+    [HttpGet("judge-work-log")]
+    public async Task<IActionResult> JudgeWorkLog([FromQuery] ReportFilter filter, CancellationToken ct) =>
+        Ok(await reports.JudgeWorkLogAsync(filter, ct));
+
     [HttpGet("turnaround")]
     public async Task<IActionResult> Turnaround([FromQuery] ReportFilter filter, CancellationToken ct) =>
         Ok(await reports.TurnaroundAsync(filter, ct));
@@ -82,6 +87,7 @@ public sealed class ReportsController(ReportService reports, IReportExporter exp
             "by-reviewer" => ReportType.ByReviewer,
             "by-head" => ReportType.ByHead,
             "by-judge" => ReportType.ByJudge,
+            "judge-work-log" => ReportType.JudgeWorkLog,
             "turnaround" => ReportType.Turnaround,
             "copies" => ReportType.Copies,
             _ => (ReportType)(-1),

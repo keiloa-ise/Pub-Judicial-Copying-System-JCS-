@@ -7,7 +7,7 @@ import {
   api, downloadReport,
   type Court, type Room, type UserDto, type CopyState,
   type ReportFilter, type ReportSummary, type CountRow, type TurnaroundReport, type CopyRow,
-  type Paged, type ReportExportType,
+  type Paged, type ReportExportType, type JudgeWorkLogRow,
 } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { useL, ErrorBox, Spinner, StateBadge, useSort, SortTh } from "../../app/ui";
@@ -44,6 +44,7 @@ export function ReportsDashboardPage() {
   const [counts, setCounts] = useState<CountRow[] | null>(null);
   const [turnaround, setTurnaround] = useState<TurnaroundReport | null>(null);
   const [copies, setCopies] = useState<Paged<CopyRow> | null>(null);
+  const [workLog, setWorkLog] = useState<JudgeWorkLogRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,8 +67,9 @@ export function ReportsDashboardPage() {
     try {
       const [sum, ch] = await Promise.all([api.reports.summary(f), api.reports.byCourt(f)]);
       setSummary(sum); setChart(ch);
-      if (activeTab === "turnaround") { setTurnaround(await api.reports.turnaround(f)); setCounts(null); setCopies(null); }
-      else if (activeTab === "copies") { setCopies(await api.reports.copies(f, pg, 50)); setCounts(null); setTurnaround(null); }
+      if (activeTab === "turnaround") { setTurnaround(await api.reports.turnaround(f)); setCounts(null); setCopies(null); setWorkLog(null); }
+      else if (activeTab === "copies") { setCopies(await api.reports.copies(f, pg, 50)); setCounts(null); setTurnaround(null); setWorkLog(null); }
+      else if (activeTab === "judge-work-log") { setWorkLog(await api.reports.judgeWorkLog(f)); setCounts(null); setTurnaround(null); setCopies(null); }
       else {
         const fn = activeTab === "by-court" ? api.reports.byCourt
           : activeTab === "by-room" ? api.reports.byRoom
@@ -75,7 +77,7 @@ export function ReportsDashboardPage() {
           : activeTab === "by-head" ? api.reports.byHead
           : activeTab === "by-judge" ? api.reports.byJudge
           : api.reports.byReviewer;
-        setCounts(await fn(f)); setTurnaround(null); setCopies(null);
+        setCounts(await fn(f)); setTurnaround(null); setCopies(null); setWorkLog(null);
       }
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -172,6 +174,7 @@ export function ReportsDashboardPage() {
           ["by-reviewer", L("حسب المدقق", "By reviewer")],
           ["by-head", L("حسب رئيس الديوان", "By registry head")],
           ["by-judge", L("حسب القاضي", "By judge")],
+          ["judge-work-log", L("سجل أعمال القضاة", "Judge work log")],
           ["turnaround", L("مدة الإنجاز", "Turnaround")],
           ["copies", L("تفاصيل النسخ", "Copies")],
         ] as [Tab, string][]).map(([t, lbl]) => (
@@ -189,11 +192,54 @@ export function ReportsDashboardPage() {
         </button>
       </div>
 
-      {busy && !counts && !turnaround && !copies ? <Spinner label={L("جارٍ التحميل…", "Loading…")} />
+      {busy && !counts && !turnaround && !copies && !workLog ? <Spinner label={L("جارٍ التحميل…", "Loading…")} />
         : tab === "turnaround" ? <TurnaroundTables data={turnaround} />
         : tab === "copies" ? <CopiesTable data={copies} page={page} onPage={setPage} />
+        : tab === "judge-work-log" ? <JudgeWorkLogTable rows={workLog ?? []} L={L} />
         : <CountTable rows={counts ?? []} dimension={dimensionLabel(tab, L)} />}
     </>
+  );
+}
+
+function JudgeWorkLogTable({ rows, L }: Readonly<{ rows: JudgeWorkLogRow[]; L: (a: string, e: string) => string }>) {
+  const sort = useSort<JudgeWorkLogRow>(rows, {
+    judge: (r) => r.judgeName, date: (r) => r.reservationDate,
+    court: (r) => r.courtName, room: (r) => r.roomName,
+  });
+  if (rows.length === 0) return <p className="muted">{L("لا توجد نتائج ضمن المدى المحدد.", "No results in the selected range.")}</p>;
+  return (
+    <table className="table">
+      <thead><tr>
+        <SortTh label={L("القاضي", "Judge")} k="judge" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+        <th>{L("الدور", "Role")}</th>
+        <th>{L("رقم النسخة/المتفرق", "Copy / misc no.")}</th>
+        <th>{L("رقم القرار", "Decision no.")}</th>
+        <SortTh label={L("المحكمة", "Court")} k="court" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+        <SortTh label={L("الغرفة", "Room")} k="room" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+        <SortTh label={L("تاريخ الحجز", "Reservation")} k="date" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+        <th>{L("الحالة", "State")}</th>
+        <th>{L("منتدب", "Delegated")}</th>
+        <th>{L("رقم الندب", "Delegation no.")}</th>
+        <th>{L("تاريخ الندب", "Delegation date")}</th>
+      </tr></thead>
+      <tbody>
+        {sort.sorted.map((r, i) => (
+          <tr key={i}>
+            <td><strong>{r.judgeName}</strong></td>
+            <td>{r.role}</td>
+            <td>{r.copyNumber ?? (r.miscNumber != null ? `${L("متفرق", "misc")} ${r.miscNumber}` : "—")}</td>
+            <td>{r.decisionNumber ?? "—"}</td>
+            <td>{r.courtName}</td>
+            <td>{r.roomName}</td>
+            <td>{r.reservationDate}</td>
+            <td><StateBadge state={r.state} /></td>
+            <td>{r.delegated ? L("نعم", "Yes") : "—"}</td>
+            <td>{r.delegationNumber ?? "—"}</td>
+            <td>{r.delegationDate ?? "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

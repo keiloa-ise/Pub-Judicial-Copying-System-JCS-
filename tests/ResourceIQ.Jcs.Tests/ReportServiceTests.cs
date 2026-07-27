@@ -108,6 +108,21 @@ public class ReportServiceTests
     }
 
     [Fact]
+    public async Task Judge_work_log_is_scoped_and_date_validated() // FR-13
+    {
+        var court = Guid.NewGuid();
+        var (svc, q, user) = Make(Role.Reviewer, court);
+        await svc.JudgeWorkLogAsync(new ReportFilter(CopyistId: Guid.NewGuid()), CancellationToken.None);
+
+        Assert.Equal(user.Id, q.LastScope!.ApprovedById);       // scoped to self
+        Assert.Equal(new[] { court }, q.LastScope.CourtIds);    // scoped to their courts
+        Assert.Null(q.LastFilter!.CopyistId);                   // client actor filter stripped
+
+        var bad = new ReportFilter(FromDate: new DateOnly(2026, 6, 10), ToDate: new DateOnly(2026, 6, 1));
+        await Assert.ThrowsAsync<DomainException>(() => svc.JudgeWorkLogAsync(bad, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Equal_start_and_end_date_is_accepted()
     {
         var (svc, q, _) = Make(Role.Administrator);

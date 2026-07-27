@@ -242,6 +242,11 @@ headline metric.
 - **Per-judge** productivity is **approximate**: judges are stored as free-text names in each copy's
   panel (president/members) rather than as structural links, so the report aggregates Approved copies
   by the judge names found in their content.
+- **Judge work log (سجل أعمال القضاة):** a **detailed** report — between two **تاريخ الحجز** dates and
+  across **all states** — listing, **per judge**, every decision they sat on with the **role** (رئيس/عضو),
+  court/room, رقم القرار, state, and — when they were **delegated (ندب)** — the **delegation date and
+  decision number** (all read from the panel stored in `FieldValuesJson`). Exportable (CSV/Excel) like
+  the other reports and scoped server-side by role + courts (BR-06).
 - **Stage timeline (FR-13 UX):** the copy detail page shows a **per-stage timeline** — each workflow
   milestone (إنشاء/قبول/تحضير/مراجعة/اعتماد…) with the **time spent in that stage**, derived from the
   append-only audit trail.
