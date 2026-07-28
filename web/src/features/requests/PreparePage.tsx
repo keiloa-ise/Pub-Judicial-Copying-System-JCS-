@@ -128,7 +128,7 @@ function SectionsEditor({ L, paragraphs, sections, setSections, title, hint }: {
       {hint && <p className="muted">{hint}</p>}
       {sections.length === 0 && (
         <p className="muted">{L("لم تُدرج أي فقرة بعد. اختر فقرة من القائمة أعلاه.",
-                                "No sections yet. Insert one from the list above.")}</p>
+          "No sections yet. Insert one from the list above.")}</p>
       )}
 
       {sections.map((sec, i) => (
@@ -194,6 +194,12 @@ export function PreparePage({ id }: { id: string }) {
       setDetail(d); setForms(f); setJudges(jdg); setTitles(tts); setAllJudges(allj);
       setLastReturn(a.find((x) => x.action === "Return" && x.reason) ?? null);
       setFormTemplateId(d.formTemplateId ?? "");
+
+      setValues(v => ({
+        ...v,
+        chamber: d.roomName
+      }));
+
       try {
         const parsedValues = JSON.parse(d.fieldValuesJson || "{}");
         // «رقم القرار» is auto-generated = the copy's own number; never typed by the copyist.
@@ -346,18 +352,18 @@ export function PreparePage({ id }: { id: string }) {
         // ندب: a delegated judge must carry both the delegation date and the delegation decision number.
         if (presidentDelegated && (!values[PRESIDENT_DELEGATION_DATE_KEY]?.trim() || !values[PRESIDENT_DELEGATION_NUMBER_KEY]?.trim()))
           throw new Error(L("يجب إدخال تاريخ الندب ورقم قرار الندب لرئيس الهيئة المنتدب.",
-                            "Enter the delegation date and decision number for the delegated president."));
+            "Enter the delegation date and decision number for the delegated president."));
         if (cleanMembers.some((m) => m.delegated && (!m.delegationDate?.trim() || !m.delegationNumber?.trim())))
           throw new Error(L("يجب إدخال تاريخ الندب ورقم قرار الندب لكل عضو منتدب.",
-                            "Enter the delegation date and decision number for every delegated member."));
+            "Enter the delegation date and decision number for every delegated member."));
         // مخالفة: a dissent with no reason text is rejected (منع وإظهار خطأ).
         if (hasDissent && !dissentSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
           throw new Error(L("يجب كتابة سبب المخالفة في ملحق الرأي المخالف.",
-                            "Enter the dissent reason in the dissenting-opinion appendix."));
+            "Enter the dissent reason in the dissenting-opinion appendix."));
         // الرد على المخالفة: a reply with no text is rejected.
         if (hasReply && !rebuttalSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
           throw new Error(L("يجب كتابة نص الرد في ملحق الرد على الرأي المخالف.",
-                            "Enter the reply text in the reply-to-dissent appendix."));
+            "Enter the reply text in the reply-to-dissent appendix."));
       }
       const fieldValues = { ...values };
       // When there is no dissent a reply is meaningless — strip any stale reply flags before saving.
@@ -429,13 +435,13 @@ export function PreparePage({ id }: { id: string }) {
             {(presidentKey || membersKey) && judges.length === 0 && (
               <div className="returnbanner">
                 {L("لا يوجد قضاة مخصّصون لهذه الغرفة. أضِفهم من شاشة القضاة.",
-                   "No judges are assigned to this room. Add them on the Judges screen.")}
+                  "No judges are assigned to this room. Add them on the Judges screen.")}
               </div>
             )}
             {(presidentKey || membersKey) && titles.length === 0 && (
               <div className="returnbanner">
                 {L("لا توجد صفات معرّفة. عرّفها من شاشة «صفات الهيئة».",
-                   "No panel titles defined. Define them on the Panel-titles screen.")}
+                  "No panel titles defined. Define them on the Panel-titles screen.")}
               </div>
             )}
             <div className="row">
@@ -461,8 +467,10 @@ export function PreparePage({ id }: { id: string }) {
                           title={L("قاضٍ منتدب من غرفة/محكمة أخرى (ندباً)", "Delegated judge from another room/court")}>
                           <input type="checkbox" checked={!!m.delegated}
                             onChange={(e) => setMembers(members.map((x, idx) => idx === i
-                              ? { ...x, delegated: e.target.checked, title: e.target.checked ? DELEGATION_TITLE : "", judge: "",
-                                  delegationDate: e.target.checked ? x.delegationDate : "", delegationNumber: e.target.checked ? x.delegationNumber : "" }
+                              ? {
+                                ...x, delegated: e.target.checked, title: e.target.checked ? DELEGATION_TITLE : "", judge: "",
+                                delegationDate: e.target.checked ? x.delegationDate : "", delegationNumber: e.target.checked ? x.delegationNumber : ""
+                              }
                               : x))} />
                           {L("منتدب", "Delegated")}
                         </label>
@@ -553,6 +561,17 @@ export function PreparePage({ id }: { id: string }) {
                       title={L("رقم القرار يُولَّد تلقائيًا من رقم النسخة", "The decision number is auto-generated from the copy number")}
                     />
                   </label>
+                ) : fld.key === "chamber" ? (
+                  <label className="field" key={fld.id}>
+                    <span>{fld.label}</span>
+                    <input
+                      type="text"
+                      value={values["chamber"] ?? detail.roomName ?? ""}
+                      readOnly
+                      lang="ar"
+                      spellCheck={false}
+                    />
+                  </label>
                 ) : (
                   <label className="field" key={fld.id}>
                     <span>{fld.label}</span>
@@ -580,7 +599,7 @@ export function PreparePage({ id }: { id: string }) {
         <SectionsEditor L={L} paragraphs={paragraphs} sections={dissentSections} setSections={setDissentSections}
           title={L("ملحق: الرأي المخالف", "Appendix: Dissenting opinion")}
           hint={L("يُطبع في صفحة جديدة بعد نهاية القرار، ويُوقّعه القضاة المخالفون.",
-                  "Printed on a new page after the decision, signed by the dissenting judges.")} />
+            "Printed on a new page after the decision, signed by the dissenting judges.")} />
       )}
 
       {/* ── Reply-to-dissent appendix — only when a non-dissenting judge replies (الرد على المخالفة) ── */}
@@ -588,7 +607,7 @@ export function PreparePage({ id }: { id: string }) {
         <SectionsEditor L={L} paragraphs={paragraphs} sections={rebuttalSections} setSections={setRebuttalSections}
           title={L("ملحق: الرد على الرأي المخالف", "Appendix: Reply to the dissenting opinion")}
           hint={L("يُطبع في صفحة جديدة بعد ملحق الرأي المخالف، ويُوقّعه القضاة أصحاب الرد.",
-                  "Printed on a new page after the dissent appendix, signed by the replying judges.")} />
+            "Printed on a new page after the dissent appendix, signed by the replying judges.")} />
       )}
 
       <div className="btn-row">

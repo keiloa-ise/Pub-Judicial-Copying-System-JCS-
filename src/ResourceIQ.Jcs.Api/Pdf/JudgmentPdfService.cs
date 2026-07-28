@@ -178,7 +178,7 @@ public sealed class JudgmentPdfService
             col.Item().Text(t =>
             {
                 t.Span("الهيئة الحاكمة: ").Bold();
-                t.Span(Dash(G("chamber")));
+                t.Span(Dash(d.RoomName));
                 t.Span(" — المؤلفة من السادة القضاة:");
             });
             col.Item().PaddingHorizontal(20).Column(p =>
