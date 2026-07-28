@@ -20,6 +20,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ICopyRequestRepository, CopyRequestRepository>();
         services.AddScoped<IFormDraftStore, FormDraftStore>();
+        services.AddScoped<ICopyCorrectionStatStore, CopyCorrectionStatStore>();
+        services.AddScoped<ICopyCorrectionBackfill, CopyCorrectionBackfillService>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAuditWriter, AuditWriter>();
         services.AddScoped<IJcsQueries, JcsQueries>();

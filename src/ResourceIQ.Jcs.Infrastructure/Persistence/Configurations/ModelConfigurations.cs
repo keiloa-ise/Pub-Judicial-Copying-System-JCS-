@@ -199,6 +199,19 @@ public sealed class FormDraftConfiguration : IEntityTypeConfiguration<FormDraft>
     }
 }
 
+public sealed class CopyCorrectionStatConfiguration : IEntityTypeConfiguration<CopyCorrectionStat>
+{
+    public void Configure(EntityTypeBuilder<CopyCorrectionStat> b)
+    {
+        b.HasKey(x => x.Id);
+        b.Ignore(x => x.WordsCorrected);   // computed (Added + Removed)
+        b.Ignore(x => x.CorrectionRate);   // computed (Corrected ÷ TotalWords)
+        b.HasIndex(x => x.CopyistId);      // report groups by copyist
+        b.HasIndex(x => x.CopyRequestId);  // next cycle index / per-copy lookups
+        b.HasIndex(x => x.ResubmittedUtc); // date-range scoping
+    }
+}
+
 public sealed class ParagraphTemplateConfiguration : IEntityTypeConfiguration<ParagraphTemplate>
 {
     public void Configure(EntityTypeBuilder<ParagraphTemplate> b)

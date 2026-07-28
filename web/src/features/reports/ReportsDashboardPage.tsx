@@ -7,7 +7,7 @@ import {
   api, downloadReport,
   type Court, type Room, type UserDto, type CopyState,
   type ReportFilter, type ReportSummary, type CountRow, type TurnaroundReport, type CopyRow,
-  type Paged, type ReportExportType, type JudgeWorkLogRow,
+  type Paged, type ReportExportType, type JudgeWorkLogRow, type CopyistAccuracyRow,
 } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { useL, ErrorBox, Spinner, StateBadge, useSort, SortTh } from "../../app/ui";
@@ -45,6 +45,7 @@ export function ReportsDashboardPage() {
   const [turnaround, setTurnaround] = useState<TurnaroundReport | null>(null);
   const [copies, setCopies] = useState<Paged<CopyRow> | null>(null);
   const [workLog, setWorkLog] = useState<JudgeWorkLogRow[] | null>(null);
+  const [accuracy, setAccuracy] = useState<CopyistAccuracyRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -67,9 +68,10 @@ export function ReportsDashboardPage() {
     try {
       const [sum, ch] = await Promise.all([api.reports.summary(f), api.reports.byCourt(f)]);
       setSummary(sum); setChart(ch);
-      if (activeTab === "turnaround") { setTurnaround(await api.reports.turnaround(f)); setCounts(null); setCopies(null); setWorkLog(null); }
-      else if (activeTab === "copies") { setCopies(await api.reports.copies(f, pg, 50)); setCounts(null); setTurnaround(null); setWorkLog(null); }
-      else if (activeTab === "judge-work-log") { setWorkLog(await api.reports.judgeWorkLog(f)); setCounts(null); setTurnaround(null); setCopies(null); }
+      if (activeTab === "turnaround") { setTurnaround(await api.reports.turnaround(f)); setCounts(null); setCopies(null); setWorkLog(null); setAccuracy(null); }
+      else if (activeTab === "copies") { setCopies(await api.reports.copies(f, pg, 50)); setCounts(null); setTurnaround(null); setWorkLog(null); setAccuracy(null); }
+      else if (activeTab === "judge-work-log") { setWorkLog(await api.reports.judgeWorkLog(f)); setCounts(null); setTurnaround(null); setCopies(null); setAccuracy(null); }
+      else if (activeTab === "copyist-accuracy") { setAccuracy(await api.reports.copyistAccuracy(f)); setCounts(null); setTurnaround(null); setCopies(null); setWorkLog(null); }
       else {
         const fn = activeTab === "by-court" ? api.reports.byCourt
           : activeTab === "by-room" ? api.reports.byRoom
@@ -77,7 +79,7 @@ export function ReportsDashboardPage() {
           : activeTab === "by-head" ? api.reports.byHead
           : activeTab === "by-judge" ? api.reports.byJudge
           : api.reports.byReviewer;
-        setCounts(await fn(f)); setTurnaround(null); setCopies(null); setWorkLog(null);
+        setCounts(await fn(f)); setTurnaround(null); setCopies(null); setWorkLog(null); setAccuracy(null);
       }
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -175,6 +177,7 @@ export function ReportsDashboardPage() {
           ["by-head", L("حسب رئيس الديوان", "By registry head")],
           ["by-judge", L("حسب القاضي", "By judge")],
           ["judge-work-log", L("سجل أعمال القضاة", "Judge work log")],
+          ["copyist-accuracy", L("دقّة المحرِّر", "Copyist accuracy")],
           ["turnaround", L("مدة الإنجاز", "Turnaround")],
           ["copies", L("تفاصيل النسخ", "Copies")],
         ] as [Tab, string][]).map(([t, lbl]) => (
@@ -192,11 +195,53 @@ export function ReportsDashboardPage() {
         </button>
       </div>
 
-      {busy && !counts && !turnaround && !copies && !workLog ? <Spinner label={L("جارٍ التحميل…", "Loading…")} />
+      {busy && !counts && !turnaround && !copies && !workLog && !accuracy ? <Spinner label={L("جارٍ التحميل…", "Loading…")} />
         : tab === "turnaround" ? <TurnaroundTables data={turnaround} />
         : tab === "copies" ? <CopiesTable data={copies} page={page} onPage={setPage} />
         : tab === "judge-work-log" ? <JudgeWorkLogTable rows={workLog ?? []} L={L} />
+        : tab === "copyist-accuracy" ? <CopyistAccuracyTable rows={accuracy ?? []} L={L} />
         : <CountTable rows={counts ?? []} dimension={dimensionLabel(tab, L)} />}
+    </>
+  );
+}
+
+function CopyistAccuracyTable({ rows, L }: Readonly<{ rows: CopyistAccuracyRow[]; L: (a: string, e: string) => string }>) {
+  const sort = useSort<CopyistAccuracyRow>(rows, {
+    name: (r) => r.copyistName,
+    rate: (r) => r.avgCorrectionRate,
+    corrected: (r) => r.totalWordsCorrected,
+    cycles: (r) => r.returnCycles,
+  });
+  if (rows.length === 0) return <p className="muted">{L("لا توجد بيانات تصحيح ضمن المدى المحدد.", "No correction data in the selected range.")}</p>;
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  return (
+    <>
+      <p className="muted" style={{ marginTop: 0 }}>
+        {L("«نسبة التصحيح» = مجموع نِسَب الكلمات المصحّحة عبر دورات الإرجاع لكل قرار (متوسطًا على قرارات المحرِّر). كلما قلّت، كانت الكتابة أدقّ.",
+           "\"Correction rate\" = the cumulative share of words corrected across a decision's returns, averaged over the copyist's decisions. Lower means more accurate writing.")}
+      </p>
+      <table className="table">
+        <thead><tr>
+          <SortTh label={L("المحرِّر", "Copyist")} k="name" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <SortTh label={L("نسبة التصحيح", "Correction rate")} k="rate" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <th>{L("قرارات مصحّحة", "Decisions corrected")}</th>
+          <SortTh label={L("دورات الإرجاع", "Return cycles")} k="cycles" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <SortTh label={L("كلمات مصحّحة", "Words corrected")} k="corrected" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <th>{L("إجمالي الكلمات", "Total words")}</th>
+        </tr></thead>
+        <tbody>
+          {sort.sorted.map((r) => (
+            <tr key={r.copyistId ?? r.copyistName}>
+              <td><strong>{r.copyistName}</strong></td>
+              <td>{pct(r.avgCorrectionRate)}</td>
+              <td>{r.decisionsCorrected}</td>
+              <td>{r.returnCycles}</td>
+              <td>{r.totalWordsCorrected}</td>
+              <td>{r.totalWords}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }

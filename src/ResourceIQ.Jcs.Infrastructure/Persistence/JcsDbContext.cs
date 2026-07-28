@@ -29,6 +29,9 @@ public sealed class JcsDbContext(DbContextOptions<JcsDbContext> options) : DbCon
     public DbSet<ParagraphTemplate> ParagraphTemplates => Set<ParagraphTemplate>();
     public DbSet<FormDraft> FormDrafts => Set<FormDraft>();
 
+    /// <summary>Copyist correction-cycle statistics (JC-58, append-only) — one row per return→re-submit.</summary>
+    public DbSet<CopyCorrectionStat> CopyCorrectionStats => Set<CopyCorrectionStat>();
+
     /// <summary>
     /// Audit entries. Exposed read-only on purpose — there is no public mutable DbSet and no
     /// repository Update/Delete path. Appends go through the audit writer only (invariant 4).

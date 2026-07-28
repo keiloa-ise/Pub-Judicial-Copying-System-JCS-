@@ -97,6 +97,20 @@ public sealed record JudgeWorkLogRow(
     string? DelegationNumber,
     string? DelegationDate);
 
+/// <summary>FR-13 (JC-58): one copyist's writing-accuracy record, aggregated over their correction
+/// cycles (each = a return the copyist then corrected). The headline is the correction rate — how many
+/// words needed correcting relative to decision size — which weighs far more than the count of returns.
+/// Rates are fractions (0.14 = 14%); the average is over the copyist's decisions, each contributing the
+/// sum of its per-cycle rates.</summary>
+public sealed record CopyistAccuracyRow(
+    Guid? CopyistId,
+    string CopyistName,
+    int DecisionsCorrected,     // distinct decisions that were returned at least once
+    int ReturnCycles,           // total return→re-submit cycles across those decisions
+    int TotalWordsCorrected,    // Σ (added + deleted words) across all cycles
+    int TotalWords,             // Σ decision word counts at re-submission (context for the totals)
+    double AvgCorrectionRate);  // PRIMARY: mean over decisions of their cumulative per-cycle rate
+
 /// <summary>Tabular report kinds that can be exported (CSV/Excel).</summary>
 public enum ReportType
 {
@@ -107,6 +121,7 @@ public enum ReportType
     ByHead,
     ByJudge,
     JudgeWorkLog,
+    CopyistAccuracy,
     Turnaround,
     Copies,
 }

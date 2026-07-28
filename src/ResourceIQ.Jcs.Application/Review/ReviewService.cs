@@ -69,7 +69,7 @@ public sealed class ReviewService(
 
     public async Task ReturnAsync(ReturnCommand cmd, CancellationToken ct)
     {
-        var request = await repository.GetAsync(cmd.CopyRequestId, ct)
+        var request = await repository.GetWithContentAsync(cmd.CopyRequestId, ct)
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireRole(currentUser, Role.Reviewer);            // BR-03
@@ -81,8 +81,11 @@ public sealed class ReviewService(
         // UnderReview → InPreparation (7B). [OPEN] decision #2: no return-cycle cap yet.
         // The corrections are stored as the audit Reason so the copyist can see why it came back
         // (each return cycle adds its own append-only entry, preserving the full history).
+        // BeforeJson snapshots the returned draft's SectionsJson — the baseline the copyist then
+        // corrects; on re-submission it is diffed to measure how many words were corrected (JC-58).
         request.ReturnForCorrection(clock.UtcNow);
-        audit.Append(request.Id, AuditAction.Return, reason: cmd.Corrections.Trim());
+        audit.Append(request.Id, AuditAction.Return,
+            beforeJson: request.Content?.SectionsJson, reason: cmd.Corrections.Trim());
         await unitOfWork.SaveChangesAsync(ct);
     }
 }

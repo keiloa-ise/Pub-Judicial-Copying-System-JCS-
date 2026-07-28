@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResourceIQ.Jcs.Application.Abstractions;
 using ResourceIQ.Jcs.Application.Reports;
+using ResourceIQ.Jcs.Application.Security;
+using ResourceIQ.Jcs.Domain.Enums;
 
 namespace ResourceIQ.Jcs.Api.Controllers;
 
@@ -14,7 +16,9 @@ namespace ResourceIQ.Jcs.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/reports")]
-public sealed class ReportsController(ReportService reports, IReportExporter exporter) : ControllerBase
+public sealed class ReportsController(
+    ReportService reports, IReportExporter exporter, ICurrentUser currentUser, ICopyCorrectionBackfill backfill)
+    : ControllerBase
 {
     [HttpGet("summary")]
     public async Task<IActionResult> Summary([FromQuery] ReportFilter filter, CancellationToken ct) =>
@@ -48,6 +52,22 @@ public sealed class ReportsController(ReportService reports, IReportExporter exp
     [HttpGet("judge-work-log")]
     public async Task<IActionResult> JudgeWorkLog([FromQuery] ReportFilter filter, CancellationToken ct) =>
         Ok(await reports.JudgeWorkLogAsync(filter, ct));
+
+    /// <summary>FR-13 (JC-58): per-copyist writing-accuracy log — words corrected after each return and
+    /// the cumulative correction rate. Scoped to the caller's courts (copyist sees only self).</summary>
+    [HttpGet("copyist-accuracy")]
+    public async Task<IActionResult> CopyistAccuracy([FromQuery] ReportFilter filter, CancellationToken ct) =>
+        Ok(await reports.CopyistAccuracyAsync(filter, ct));
+
+    /// <summary>Administrator-only one-off: backfill copyist correction stats from historical audit data
+    /// so the accuracy report reflects decisions returned before this feature shipped. Idempotent.</summary>
+    [HttpPost("copyist-accuracy/backfill")]
+    public async Task<IActionResult> BackfillCopyistAccuracy(CancellationToken ct)
+    {
+        Guard.RequireRole(currentUser, Role.Administrator);
+        var created = await backfill.RunAsync(ct);
+        return Ok(new { created });
+    }
 
     [HttpGet("turnaround")]
     public async Task<IActionResult> Turnaround([FromQuery] ReportFilter filter, CancellationToken ct) =>
@@ -88,6 +108,7 @@ public sealed class ReportsController(ReportService reports, IReportExporter exp
             "by-head" => ReportType.ByHead,
             "by-judge" => ReportType.ByJudge,
             "judge-work-log" => ReportType.JudgeWorkLog,
+            "copyist-accuracy" => ReportType.CopyistAccuracy,
             "turnaround" => ReportType.Turnaround,
             "copies" => ReportType.Copies,
             _ => (ReportType)(-1),

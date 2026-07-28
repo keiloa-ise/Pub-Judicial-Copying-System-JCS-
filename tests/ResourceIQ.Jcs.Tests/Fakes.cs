@@ -119,6 +119,20 @@ internal sealed class FakeFormDraftStore : IFormDraftStore
     }
 }
 
+/// <summary>In-memory correction-stat store. <see cref="Baseline"/> stands in for the open return
+/// baseline the real store reads from the audit trail.</summary>
+internal sealed class FakeCopyCorrectionStatStore : ICopyCorrectionStatStore
+{
+    public List<CopyCorrectionStat> Saved { get; } = [];
+    public ReturnBaseline? Baseline { get; set; }
+
+    public Task AddAsync(CopyCorrectionStat stat, CancellationToken ct) { Saved.Add(stat); return Task.CompletedTask; }
+    public Task<int> CountForCopyAsync(Guid copyRequestId, CancellationToken ct) =>
+        Task.FromResult(Saved.Count(s => s.CopyRequestId == copyRequestId));
+    public Task<ReturnBaseline?> GetOpenReturnBaselineAsync(Guid copyRequestId, CancellationToken ct) =>
+        Task.FromResult(Baseline);
+}
+
 /// <summary>Read-side fake. Only <see cref="GetRoomAsync"/> is exercised by the service tests
 /// (room↔court validation on create); the rest are not invoked by those tests.</summary>
 internal sealed class FakeQueries : IJcsQueries
@@ -182,6 +196,8 @@ internal sealed class FakeReportQueries : IReportQueries
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
     public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture<IReadOnlyList<JudgeWorkLogRow>>(scope, filter, []));
+    public Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
+        Task.FromResult(Capture<IReadOnlyList<CopyistAccuracyRow>>(scope, filter, []));
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture(scope, filter, new TurnaroundReportDto([], [])));
     public Task<Paged<CopyRowDto>> CopiesAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct) =>

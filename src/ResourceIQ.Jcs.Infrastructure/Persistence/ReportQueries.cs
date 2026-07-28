@@ -231,6 +231,61 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
         return result.OrderBy(x => x.JudgeName).ThenBy(x => x.ReservationDate).ToList();
     }
 
+    public async Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportScope scope, ReportFilter filter, CancellationToken ct)
+    {
+        // Scope: pin to self for a copyist; otherwise restrict to the caller's courts (Admin = all).
+        // Applied server-side BEFORE any client filter (BR-06 posture), same as the copy reports.
+        var q = db.CopyCorrectionStats.AsNoTracking();
+        if (scope.AssignedCopyistId is { } sc) q = q.Where(x => x.CopyistId == sc);
+        if (scope.CourtIds is not null)
+        {
+            var ids = scope.CourtIds.ToArray();
+            q = q.Where(x => ids.Contains(x.CourtId));
+        }
+        if (filter.CopyistId is { } fcp) q = q.Where(x => x.CopyistId == fcp);
+        if (filter.CourtId is { } fc) q = q.Where(x => x.CourtId == fc);
+        if (filter.FromDate is { } fd)
+        {
+            var from = new DateTimeOffset(fd.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            q = q.Where(x => x.ResubmittedUtc >= from);
+        }
+        if (filter.ToDate is { } td)
+        {
+            var toExcl = new DateTimeOffset(td.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            q = q.Where(x => x.ResubmittedUtc < toExcl);
+        }
+
+        var stats = await q
+            .Select(x => new { x.CopyistId, x.CopyRequestId, x.WordsAdded, x.WordsRemoved, x.TotalWords })
+            .ToListAsync(ct);
+        if (stats.Count == 0) return [];
+
+        var names = await UserNamesAsync(stats.Select(s => (Guid?)s.CopyistId), ct);
+
+        var rows = stats
+            .GroupBy(s => s.CopyistId)
+            .Select(g =>
+            {
+                // Per-decision cumulative rate = Σ (corrected ÷ total) over that decision's cycles;
+                // the copyist's headline is the mean of those across their decisions (lower = better).
+                var perDecision = g.GroupBy(s => s.CopyRequestId)
+                    .Select(d => d.Sum(s => s.TotalWords <= 0 ? 0d : (double)(s.WordsAdded + s.WordsRemoved) / s.TotalWords))
+                    .ToList();
+                return new CopyistAccuracyRow(
+                    CopyistId: g.Key,
+                    CopyistName: names.TryGetValue(g.Key, out var n) ? n : Unassigned,
+                    DecisionsCorrected: perDecision.Count,
+                    ReturnCycles: g.Count(),
+                    TotalWordsCorrected: g.Sum(s => s.WordsAdded + s.WordsRemoved),
+                    TotalWords: g.Sum(s => s.TotalWords),
+                    AvgCorrectionRate: perDecision.Count == 0 ? 0d : perDecision.Average());
+            })
+            .OrderByDescending(r => r.AvgCorrectionRate) // most correction needed first (needs attention)
+            .ThenBy(r => r.CopyistName)
+            .ToList();
+        return rows;
+    }
+
     public async Task<ReportSummaryDto> SummaryAsync(ReportScope scope, ReportFilter filter, CancellationToken ct)
     {
         var q = Base(scope, filter);

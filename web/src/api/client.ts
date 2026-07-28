@@ -137,7 +137,12 @@ export interface JudgeWorkLogRow {
   courtName: string; roomName: string; reservationDate: string; state: CopyState; role: string;
   delegated: boolean; delegationNumber: string | null; delegationDate: string | null;
 }
-export type ReportExportType = "by-court" | "by-room" | "by-copyist" | "by-reviewer" | "by-head" | "by-judge" | "judge-work-log" | "turnaround" | "copies";
+export interface CopyistAccuracyRow {
+  copyistId: string | null; copyistName: string;
+  decisionsCorrected: number; returnCycles: number;
+  totalWordsCorrected: number; totalWords: number; avgCorrectionRate: number; // fraction, e.g. 0.14 = 14%
+}
+export type ReportExportType = "by-court" | "by-room" | "by-copyist" | "by-reviewer" | "by-head" | "by-judge" | "judge-work-log" | "copyist-accuracy" | "turnaround" | "copies";
 
 function reportParams(f: ReportFilter): URLSearchParams {
   const p = new URLSearchParams();
@@ -259,6 +264,7 @@ export const api = {
     byHead: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-head?${reportParams(f)}`),
     byJudge: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-judge?${reportParams(f)}`),
     judgeWorkLog: (f: ReportFilter) => request<JudgeWorkLogRow[]>(`/api/reports/judge-work-log?${reportParams(f)}`),
+    copyistAccuracy: (f: ReportFilter) => request<CopyistAccuracyRow[]>(`/api/reports/copyist-accuracy?${reportParams(f)}`),
     turnaround: (f: ReportFilter) => request<TurnaroundReport>(`/api/reports/turnaround?${reportParams(f)}`),
     copies: (f: ReportFilter, page: number, pageSize: number) => {
       const p = reportParams(f); p.set("page", String(page)); p.set("pageSize", String(pageSize));

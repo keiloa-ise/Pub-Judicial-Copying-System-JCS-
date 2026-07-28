@@ -42,6 +42,9 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
     public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportFilter filter, CancellationToken ct) =>
         queries.JudgeWorkLogAsync(Scope(), Safe(filter), ct);
 
+    public Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportFilter filter, CancellationToken ct) =>
+        queries.CopyistAccuracyAsync(Scope(), Safe(filter), ct);
+
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportFilter filter, CancellationToken ct) =>
         queries.TurnaroundAsync(Scope(), Safe(filter), ct);
 
@@ -96,6 +99,8 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
                 return CountTable("تقرير النسخ حسب القاضي (تقريبي)", "القاضي", await ByJudgeAsync(filter, ct));
             case ReportType.JudgeWorkLog:
                 return JudgeWorkLogTable(await JudgeWorkLogAsync(filter, ct));
+            case ReportType.CopyistAccuracy:
+                return CopyistAccuracyTable(await CopyistAccuracyAsync(filter, ct));
             case ReportType.Turnaround:
                 return TurnaroundTable(await TurnaroundAsync(filter, ct));
             case ReportType.Copies:
@@ -157,6 +162,24 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
             r.TurnaroundHours?.ToString("0.0", CultureInfo.InvariantCulture) ?? "",
         }).ToList();
         return new ReportTable("تقرير النسخ", headers, data);
+    }
+
+    private static ReportTable CopyistAccuracyTable(IReadOnlyList<CopyistAccuracyRow> rows)
+    {
+        var headers = new[]
+        {
+            "المحرِّر", "نسبة التصحيح", "قرارات مصحّحة", "دورات الإرجاع", "كلمات مصحّحة", "إجمالي الكلمات",
+        };
+        var data = rows.Select(r => (IReadOnlyList<string>)new[]
+        {
+            r.CopyistName,
+            (r.AvgCorrectionRate * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%",
+            r.DecisionsCorrected.ToString(CultureInfo.InvariantCulture),
+            r.ReturnCycles.ToString(CultureInfo.InvariantCulture),
+            r.TotalWordsCorrected.ToString(CultureInfo.InvariantCulture),
+            r.TotalWords.ToString(CultureInfo.InvariantCulture),
+        }).ToList();
+        return new ReportTable("تقرير دقّة عمل المحرِّر (صحّة الكتابة)", headers, data);
     }
 
     private static ReportTable JudgeWorkLogTable(IReadOnlyList<JudgeWorkLogRow> rows)
