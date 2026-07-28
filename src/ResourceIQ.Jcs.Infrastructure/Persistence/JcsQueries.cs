@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ResourceIQ.Jcs.Application.Abstractions;
 using ResourceIQ.Jcs.Application.ReadModels;
+using ResourceIQ.Jcs.Application.Reports;
 using ResourceIQ.Jcs.Domain.Entities;
 using ResourceIQ.Jcs.Domain.Enums;
 
@@ -9,46 +10,54 @@ namespace ResourceIQ.Jcs.Infrastructure.Persistence;
 /// <summary>EF-backed read projections. No tracking — these are read-only DTO queries.</summary>
 public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
 {
-    public async Task<IReadOnlyList<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, CancellationToken ct)
+    public async Task<Paged<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, int page, int pageSize, CancellationToken ct)
     {
         var states = filter.States?.ToArray();
         var courts = filter.CourtIds?.ToArray();
 
-        var q = from cr in db.CopyRequests.AsNoTracking()
-                join c in db.Courts on cr.CourtId equals c.Id
-                join rm in db.Rooms on cr.RoomId equals rm.Id
-                join uu in db.Users on cr.AssignedCopyistId equals uu.Id into uj
-                from u in uj.DefaultIfEmpty()
-                select new { cr, CourtName = c.Name, RoomName = rm.Name, CopyistName = (string?)(u != null ? u.DisplayName : null) };
-
-        if (states is { Length: > 0 }) q = q.Where(x => states.Contains(x.cr.State));
-        if (filter.AssignedCopyistId is { } cp) q = q.Where(x => x.cr.AssignedCopyistId == cp);
-        if (filter.CreatedById is { } cb) q = q.Where(x => x.cr.CreatedById == cb);
+        // Filter on the base set first (kept over CopyRequest so the priority index can serve the sort +
+        // page); the court/room/copyist name joins are applied only to the page's rows below.
+        var baseQ = db.CopyRequests.AsNoTracking();
+        if (states is { Length: > 0 }) baseQ = baseQ.Where(cr => states.Contains(cr.State));
+        if (filter.AssignedCopyistId is { } cp) baseQ = baseQ.Where(cr => cr.AssignedCopyistId == cp);
+        if (filter.CreatedById is { } cb) baseQ = baseQ.Where(cr => cr.CreatedById == cb);
         // null courts => no restriction (admin); a non-null list restricts (empty => no rows).
-        if (courts is not null) q = q.Where(x => courts.Contains(x.cr.CourtId));
-        if (filter.RoomId is { } room) q = q.Where(x => x.cr.RoomId == room);
+        if (courts is not null) baseQ = baseQ.Where(cr => courts.Contains(cr.CourtId));
+        if (filter.RoomId is { } room) baseQ = baseQ.Where(cr => cr.RoomId == room);
 
         // Advanced-search narrowing
         if (!string.IsNullOrWhiteSpace(filter.CopyNumber))
-            q = q.Where(x => x.cr.CopyNumber != null && x.cr.CopyNumber.Contains(filter.CopyNumber));
+            baseQ = baseQ.Where(cr => cr.CopyNumber != null && cr.CopyNumber.Contains(filter.CopyNumber));
         if (!string.IsNullOrWhiteSpace(filter.CaseBaseNumber))
-            q = q.Where(x => x.cr.CaseBaseNumber.Contains(filter.CaseBaseNumber));
-        if (filter.FromReservation is { } from) q = q.Where(x => x.cr.ReservationDate >= from);
-        if (filter.ToReservation is { } to) q = q.Where(x => x.cr.ReservationDate <= to);
+            baseQ = baseQ.Where(cr => cr.CaseBaseNumber.Contains(filter.CaseBaseNumber));
+        if (filter.FromReservation is { } from) baseQ = baseQ.Where(cr => cr.ReservationDate >= from);
+        if (filter.ToReservation is { } to) baseQ = baseQ.Where(cr => cr.ReservationDate <= to);
 
-        return await q
-            // Work-queue execution priority: موقوف (Suspended) first, then مستعجل (Expedited),
-            // then the rest; within a tier, OLDEST first (by creation) — acceptance must follow this order.
-            .OrderByDescending(x => x.cr.Urgency == CaseUrgency.Suspended)
-            .ThenByDescending(x => x.cr.Urgency == CaseUrgency.Expedited)
-            .ThenBy(x => x.cr.CreatedUtc)
-            .Select(x => new CopyRequestListItem(
-                x.cr.Id, x.cr.CopyNumber, x.cr.State, x.cr.CourtId, x.CourtName,
-                x.cr.RoomId, x.RoomName,
-                x.cr.CaseBaseNumber, x.cr.CaseFilingDate, x.cr.ReservationDate,
-                x.cr.Category, x.cr.Urgency, x.cr.ExpediteRequestNumber, x.cr.MiscNumber,
-                x.cr.AssignedCopyistId, x.CopyistName, x.cr.CreatedUtc, x.cr.AcceptedUtc))
+        var total = await baseQ.CountAsync(ct);
+
+        // Work-queue execution priority via the PERSISTED PriorityRank index (موقوف → مستعجل → عادي),
+        // then OLDEST first — an index seek even for the Administrator's unscoped list. Page BEFORE joins.
+        var pageQ = baseQ
+            .OrderBy(cr => cr.PriorityRank)
+            .ThenBy(cr => cr.CreatedUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize);
+
+        var items = await (
+            from cr in pageQ
+            join c in db.Courts on cr.CourtId equals c.Id
+            join rm in db.Rooms on cr.RoomId equals rm.Id
+            join uu in db.Users on cr.AssignedCopyistId equals uu.Id into uj
+            from u in uj.DefaultIfEmpty()
+            select new CopyRequestListItem(
+                cr.Id, cr.CopyNumber, cr.State, cr.CourtId, c.Name,
+                cr.RoomId, rm.Name,
+                cr.CaseBaseNumber, cr.CaseFilingDate, cr.ReservationDate,
+                cr.Category, cr.Urgency, cr.ExpediteRequestNumber, cr.MiscNumber,
+                cr.AssignedCopyistId, u != null ? u.DisplayName : null, cr.CreatedUtc, cr.AcceptedUtc))
             .ToListAsync(ct);
+
+        return new Paged<CopyRequestListItem>(items, total, page, pageSize);
     }
 
     public async Task<CopyRequestDetail?> GetCopyRequestAsync(Guid id, CancellationToken ct)

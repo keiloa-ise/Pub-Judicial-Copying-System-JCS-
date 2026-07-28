@@ -21,7 +21,7 @@ public interface IReportQueries
     Task<IReadOnlyList<CountRow>> CountByJudgeAsync(ReportScope scope, ReportFilter filter, CancellationToken ct);
     /// <summary>FR-13: per-judge work log — one row per decision each judge sat on (as president/member)
     /// within the ReservationDate range, any state; includes role + delegation (read from FieldValuesJson).</summary>
-    Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct);
+    Task<Paged<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct);
     /// <summary>FR-13 (JC-58): per-copyist writing-accuracy log from stored correction cycles — words
     /// corrected after each return, and the cumulative per-decision correction rate (the primary metric).</summary>
     Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportScope scope, ReportFilter filter, CancellationToken ct);

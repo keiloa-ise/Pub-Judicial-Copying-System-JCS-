@@ -44,7 +44,7 @@ export function ReportsDashboardPage() {
   const [counts, setCounts] = useState<CountRow[] | null>(null);
   const [turnaround, setTurnaround] = useState<TurnaroundReport | null>(null);
   const [copies, setCopies] = useState<Paged<CopyRow> | null>(null);
-  const [workLog, setWorkLog] = useState<JudgeWorkLogRow[] | null>(null);
+  const [workLog, setWorkLog] = useState<Paged<JudgeWorkLogRow> | null>(null);
   const [accuracy, setAccuracy] = useState<CopyistAccuracyRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,7 +70,7 @@ export function ReportsDashboardPage() {
       setSummary(sum); setChart(ch);
       if (activeTab === "turnaround") { setTurnaround(await api.reports.turnaround(f)); setCounts(null); setCopies(null); setWorkLog(null); setAccuracy(null); }
       else if (activeTab === "copies") { setCopies(await api.reports.copies(f, pg, 50)); setCounts(null); setTurnaround(null); setWorkLog(null); setAccuracy(null); }
-      else if (activeTab === "judge-work-log") { setWorkLog(await api.reports.judgeWorkLog(f)); setCounts(null); setTurnaround(null); setCopies(null); setAccuracy(null); }
+      else if (activeTab === "judge-work-log") { setWorkLog(await api.reports.judgeWorkLog(f, pg, 50)); setCounts(null); setTurnaround(null); setCopies(null); setAccuracy(null); }
       else if (activeTab === "copyist-accuracy") { setAccuracy(await api.reports.copyistAccuracy(f)); setCounts(null); setTurnaround(null); setCopies(null); setWorkLog(null); }
       else {
         const fn = activeTab === "by-court" ? api.reports.byCourt
@@ -85,17 +85,25 @@ export function ReportsDashboardPage() {
     finally { setBusy(false); }
   }, []);
 
-  useEffect(() => { load(filter, tab, page); }, [load, filter, tab, page]);
+  // Reports must not run without a bounded date range (enforced server-side too). Applied filters only
+  // trigger a load once both dates are set — no unfiltered full-table scans on open.
+  const hasRange = !!(filter.fromDate && filter.toDate);
+  useEffect(() => { if (hasRange) load(filter, tab, page); }, [load, filter, tab, page, hasRange]);
 
   function apply() {
-    if (draft.fromDate && draft.toDate && draft.fromDate > draft.toDate) {
+    if (!draft.fromDate || !draft.toDate) {
+      setErr(L("يجب تحديد المدى التاريخي (من/إلى) قبل عرض التقرير.",
+        "A date range (from/to) is required before running a report."));
+      return;
+    }
+    if (draft.fromDate > draft.toDate) {
       setErr(L("«من تاريخ» يجب أن يكون قبل «إلى تاريخ» أو يساويه. الرجاء تصحيح تاريخ البداية.",
         "The start date must be before or equal to the end date. Please correct the start date."));
       return;
     }
-    setPage(1); setFilter(draft);
+    setErr(null); setPage(1); setFilter(draft);
   }
-  function reset() { setDraft({}); setPage(1); setFilter({}); }
+  function reset() { setDraft({}); setPage(1); setFilter({}); setSummary(null); setChart([]); setCounts(null); setTurnaround(null); setCopies(null); setWorkLog(null); setAccuracy(null); }
   const patch = (p: Partial<ReportFilter>) => setDraft((d) => ({ ...d, ...p }));
 
   return (
@@ -161,11 +169,13 @@ export function ReportsDashboardPage() {
         </div>
       )}
 
-      {/* ── Chart ── */}
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>{L("النسخ حسب المحكمة", "Copies per court")}</h3>
-        <div className="chart-box"><CourtChart rows={chart} totalLabel={L("الإجمالي", "Total")} /></div>
-      </div>
+      {/* ── Chart (only after a range is applied) ── */}
+      {hasRange && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>{L("النسخ حسب المحكمة", "Copies per court")}</h3>
+          <div className="chart-box"><CourtChart rows={chart} totalLabel={L("الإجمالي", "Total")} /></div>
+        </div>
+      )}
 
       {/* ── Report tabs + export ── */}
       <div className="tabs">
@@ -187,18 +197,23 @@ export function ReportsDashboardPage() {
 
       <div className="toolbar">
         <div className="spacer" />
-        <button className="btn btn--ghost" disabled={busy} onClick={() => downloadReport(tab, "csv", filter).catch((e) => setErr((e as Error).message))}>
+        <button className="btn btn--ghost" disabled={busy || !hasRange} onClick={() => downloadReport(tab, "csv", filter).catch((e) => setErr((e as Error).message))}>
           {L("تصدير CSV", "Export CSV")}
         </button>
-        <button className="btn btn--ghost" disabled={busy} onClick={() => downloadReport(tab, "xlsx", filter).catch((e) => setErr((e as Error).message))}>
+        <button className="btn btn--ghost" disabled={busy || !hasRange} onClick={() => downloadReport(tab, "xlsx", filter).catch((e) => setErr((e as Error).message))}>
           {L("تصدير Excel", "Export Excel")}
         </button>
       </div>
 
-      {busy && !counts && !turnaround && !copies && !workLog && !accuracy ? <Spinner label={L("جارٍ التحميل…", "Loading…")} />
+      {!hasRange ? (
+        <div className="card"><p className="muted" style={{ margin: 0 }}>
+          {L("حدّد مدى تاريخيًا (من/إلى) ثم اضغط «تطبيق» لعرض التقرير. لا تُشغَّل التقارير دون فلاتر مناسبة.",
+             "Select a date range (from/to) and press Apply to run the report. Reports do not run without appropriate filters.")}
+        </p></div>
+      ) : busy && !counts && !turnaround && !copies && !workLog && !accuracy ? <Spinner label={L("جارٍ التحميل…", "Loading…")} />
         : tab === "turnaround" ? <TurnaroundTables data={turnaround} />
         : tab === "copies" ? <CopiesTable data={copies} page={page} onPage={setPage} />
-        : tab === "judge-work-log" ? <JudgeWorkLogTable rows={workLog ?? []} L={L} />
+        : tab === "judge-work-log" ? <JudgeWorkLogTable data={workLog} page={page} onPage={setPage} />
         : tab === "copyist-accuracy" ? <CopyistAccuracyTable rows={accuracy ?? []} L={L} />
         : <CountTable rows={counts ?? []} dimension={dimensionLabel(tab, L)} />}
     </>
@@ -246,45 +261,57 @@ function CopyistAccuracyTable({ rows, L }: Readonly<{ rows: CopyistAccuracyRow[]
   );
 }
 
-function JudgeWorkLogTable({ rows, L }: Readonly<{ rows: JudgeWorkLogRow[]; L: (a: string, e: string) => string }>) {
+function JudgeWorkLogTable({ data, page, onPage }: Readonly<{ data: Paged<JudgeWorkLogRow> | null; page: number; onPage: (p: number) => void }>) {
+  const L = useL();
+  const rows = data?.items ?? [];
   const sort = useSort<JudgeWorkLogRow>(rows, {
     judge: (r) => r.judgeName, date: (r) => r.reservationDate,
     court: (r) => r.courtName, room: (r) => r.roomName,
   });
-  if (rows.length === 0) return <p className="muted">{L("لا توجد نتائج ضمن المدى المحدد.", "No results in the selected range.")}</p>;
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   return (
-    <table className="table">
-      <thead><tr>
-        <SortTh label={L("القاضي", "Judge")} k="judge" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
-        <th>{L("الدور", "Role")}</th>
-        <th>{L("رقم النسخة/المتفرق", "Copy / misc no.")}</th>
-        <th>{L("رقم القرار", "Decision no.")}</th>
-        <SortTh label={L("المحكمة", "Court")} k="court" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
-        <SortTh label={L("الغرفة", "Room")} k="room" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
-        <SortTh label={L("تاريخ الحجز", "Reservation")} k="date" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
-        <th>{L("الحالة", "State")}</th>
-        <th>{L("منتدب", "Delegated")}</th>
-        <th>{L("رقم الندب", "Delegation no.")}</th>
-        <th>{L("تاريخ الندب", "Delegation date")}</th>
-      </tr></thead>
-      <tbody>
-        {sort.sorted.map((r, i) => (
-          <tr key={i}>
-            <td><strong>{r.judgeName}</strong></td>
-            <td>{r.role}</td>
-            <td>{r.copyNumber ?? (r.miscNumber != null ? `${L("متفرق", "misc")} ${r.miscNumber}` : "—")}</td>
-            <td>{r.decisionNumber ?? "—"}</td>
-            <td>{r.courtName}</td>
-            <td>{r.roomName}</td>
-            <td>{r.reservationDate}</td>
-            <td><StateBadge state={r.state} /></td>
-            <td>{r.delegated ? L("نعم", "Yes") : "—"}</td>
-            <td>{r.delegationNumber ?? "—"}</td>
-            <td>{r.delegationDate ?? "—"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <>
+      <table className="table">
+        <thead><tr>
+          <SortTh label={L("القاضي", "Judge")} k="judge" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <th>{L("الدور", "Role")}</th>
+          <th>{L("رقم النسخة/المتفرق", "Copy / misc no.")}</th>
+          <th>{L("رقم القرار", "Decision no.")}</th>
+          <SortTh label={L("المحكمة", "Court")} k="court" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <SortTh label={L("الغرفة", "Room")} k="room" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <SortTh label={L("تاريخ الحجز", "Reservation")} k="date" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+          <th>{L("الحالة", "State")}</th>
+          <th>{L("منتدب", "Delegated")}</th>
+          <th>{L("رقم الندب", "Delegation no.")}</th>
+          <th>{L("تاريخ الندب", "Delegation date")}</th>
+        </tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td className="empty" colSpan={11}>{L("لا توجد نتائج ضمن المدى المحدد.", "No results in the selected range.")}</td></tr>}
+          {sort.sorted.map((r, i) => (
+            <tr key={i}>
+              <td><strong>{r.judgeName}</strong></td>
+              <td>{r.role}</td>
+              <td>{r.copyNumber ?? (r.miscNumber != null ? `${L("متفرق", "misc")} ${r.miscNumber}` : "—")}</td>
+              <td>{r.decisionNumber ?? "—"}</td>
+              <td>{r.courtName}</td>
+              <td>{r.roomName}</td>
+              <td>{r.reservationDate}</td>
+              <td><StateBadge state={r.state} /></td>
+              <td>{r.delegated ? L("نعم", "Yes") : "—"}</td>
+              <td>{r.delegationNumber ?? "—"}</td>
+              <td>{r.delegationDate ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data && data.total > data.pageSize && (
+        <div className="pager">
+          <button className="btn btn--ghost" disabled={page <= 1} onClick={() => onPage(page - 1)}>{L("السابق", "Prev")}</button>
+          <span className="muted">{L("صفحة", "Page")} {page} / {totalPages} — {data.total} {L("قرار", "decisions")}</span>
+          <button className="btn btn--ghost" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>{L("التالي", "Next")}</button>
+        </div>
+      )}
+    </>
   );
 }
 

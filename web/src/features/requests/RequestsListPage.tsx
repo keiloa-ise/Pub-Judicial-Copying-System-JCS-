@@ -7,6 +7,7 @@ import { useI18n } from "../../i18n";
 import { ConnectionStatus, type ConnState } from "../../components/ConnectionStatus";
 
 const POLL_MS = 45_000; // auto-refresh interval for new/updated requests
+const PAGE_SIZE = 50;   // server-paged; keeps payload + DOM bounded at any table size
 
 const states: CopyState[] = ["Created", "InPreparation", "UnderReview", "Approved", "Unlocked"];
 const stateLabel: Record<CopyState, { ar: string; en: string }> = {
@@ -28,6 +29,8 @@ export function RequestsListPage() {
   const ar = lang === "ar";
 
   const [items, setItems] = useState<CopyRequestListItem[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [courts, setCourts] = useState<Court[]>([]);
   const [filters, setFilters] = useState<RequestSearch>(empty);
   const [err, setErr] = useState<string | null>(null);
@@ -35,28 +38,31 @@ export function RequestsListPage() {
   const [conn, setConn] = useState<ConnState>("online");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const appliedRef = useRef<RequestSearch>(empty); // the search currently shown (what polling re-runs)
+  const pageRef = useRef(1);                        // the page currently shown (what polling re-runs)
 
-  // Load the list. `silent` keeps the current table visible (used by polling + the status button)
-  // and only flips the connection indicator; an explicit load shows the spinner.
-  const load = useCallback(async (search: RequestSearch, silent = false) => {
+  // Load one page of the list. Paged server-side so even the Administrator's unscoped queue never pulls
+  // the whole table (500k+). `silent` keeps the current table visible (polling + status button) and only
+  // flips the connection indicator; an explicit load shows the spinner.
+  const load = useCallback(async (search: RequestSearch, pg: number, silent = false) => {
     if (!silent) { setItems(null); setErr(null); }
-    appliedRef.current = search;
+    appliedRef.current = search; pageRef.current = pg;
     setConn("refreshing");
     try {
-      const data = await api.listRequests(search);
-      setItems(data); setConn("online"); setLastUpdated(new Date()); setErr(null);
+      const data = await api.listRequests(search, pg, PAGE_SIZE);
+      setItems(data.items); setTotal(data.total); setPage(data.page);
+      setConn("online"); setLastUpdated(new Date()); setErr(null);
     } catch (e) {
       setConn("offline");
       if (!silent) setErr((e as Error).message);
     }
   }, []);
 
-  useEffect(() => { load(empty); }, [load]);
+  useEffect(() => { load(empty, 1); }, [load]);
   useEffect(() => { api.lookupCourts().then(setCourts).catch(() => { /* courts optional for filter */ }); }, []);
 
   // Auto-poll for new/updated requests; skip while the tab is hidden to avoid useless calls.
   useEffect(() => {
-    const id = setInterval(() => { if (!document.hidden) load(appliedRef.current, true); }, POLL_MS);
+    const id = setInterval(() => { if (!document.hidden) load(appliedRef.current, pageRef.current, true); }, POLL_MS);
     return () => clearInterval(id);
   }, [load]);
 
@@ -65,9 +71,11 @@ export function RequestsListPage() {
     : user?.role === "RegistryHead" ? L("طلباتي", "My requests")
     : L("جميع الطلبات", "All requests");
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   function patch(p: Partial<RequestSearch>) { setFilters((f) => ({ ...f, ...p })); }
-  function submit(e: FormEvent) { e.preventDefault(); load(filters); }
-  function reset() { setFilters(empty); load(empty); }
+  function submit(e: FormEvent) { e.preventDefault(); load(filters, 1); }
+  function reset() { setFilters(empty); load(empty, 1); }
+  function goToPage(p: number) { if (p >= 1 && p <= totalPages) load(appliedRef.current, p); }
 
   const activeCount = Object.values(filters).filter(Boolean).length;
 
@@ -93,7 +101,7 @@ export function RequestsListPage() {
       <div className="toolbar">
         <h1 className="page-title">{title}</h1>
         <div className="spacer" />
-        <ConnectionStatus state={conn} lastUpdated={lastUpdated} onRefresh={() => load(appliedRef.current, true)} />
+        <ConnectionStatus state={conn} lastUpdated={lastUpdated} onRefresh={() => load(appliedRef.current, pageRef.current, true)} />
         <button className="btn btn--ghost" onClick={() => setOpen((o) => !o)}>
           {L("بحث متقدم", "Advanced search")}{activeCount ? ` (${activeCount})` : ""}
         </button>
@@ -181,6 +189,21 @@ export function RequestsListPage() {
             })}
           </tbody>
         </table>
+      )}
+
+      {items && total > 0 && (
+        <div className="toolbar" style={{ marginTop: 8 }}>
+          <span className="muted">
+            {L(`صفحة ${page} من ${totalPages} — إجمالي ${total}`, `Page ${page} of ${totalPages} — ${total} total`)}
+          </span>
+          <div className="spacer" />
+          <button className="btn btn--ghost" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+            {L("السابق", "Previous")}
+          </button>
+          <button className="btn btn--ghost" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+            {L("التالي", "Next")}
+          </button>
+        </div>
       )}
     </>
   );

@@ -114,8 +114,18 @@ public sealed class CopyRequestConfiguration : IEntityTypeConfiguration<CopyRequ
         b.HasIndex(x => x.State);
         b.HasIndex(x => x.ApprovedById);
         b.HasIndex(x => x.AssignedCopyistId);
+        b.HasIndex(x => x.ReservationDate); // FR-13 judge-work-log ranges on تاريخ الحجز
         // BR-11: lookup of متفرق copies linked to an original copy (and the delete guard).
         b.HasIndex(x => x.OriginalCopyId);
+
+        // Work-queue listing: PERSISTED priority rank (0 موقوف / 1 مستعجل / 2 عادي) so the requests page
+        // orders by (PriorityRank, CreatedUtc) via an index seek instead of sorting the whole table on a
+        // non-sargable CASE — essential for the Administrator's unscoped list at 500k+ rows. Urgency ints:
+        // Suspended=1, Expedited=2, Normal=3.
+        b.Property(x => x.PriorityRank)
+            .HasComputedColumnSql("CASE [Urgency] WHEN 1 THEN 0 WHEN 2 THEN 1 ELSE 2 END", stored: true);
+        b.HasIndex(x => new { x.PriorityRank, x.CreatedUtc })
+            .IncludeProperties(x => new { x.State, x.CourtId, x.RoomId, x.AssignedCopyistId });
 
         // رقم الأساس is unique PER COURT for عادي copies only. متفرق copies inherit the original's
         // رقم الأساس, so they are excluded via a filtered index ([Category] = 1 is Normal).

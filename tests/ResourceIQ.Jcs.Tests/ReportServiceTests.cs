@@ -7,10 +7,13 @@ using Xunit;
 namespace ResourceIQ.Jcs.Tests;
 
 /// <summary>FR-13 authorization: reports are scoped server-side by role + assigned courts (BR-06).
-/// These assert the scope the service hands the query layer, and that scoped roles cannot widen it
-/// via client filters.</summary>
+/// These assert the scope the service hands the query layer, that scoped roles cannot widen it via
+/// client filters, and that no report runs without a mandatory date range.</summary>
 public class ReportServiceTests
 {
+    // A valid bounded range — required by every report now, so scope tests carry one.
+    private static readonly ReportFilter Range = new(FromDate: new DateOnly(2026, 6, 1), ToDate: new DateOnly(2026, 6, 30));
+
     private static (ReportService svc, FakeReportQueries q, FakeCurrentUser user) Make(Role role, params Guid[] courts)
     {
         var user = new FakeCurrentUser { Role = role };
@@ -23,7 +26,7 @@ public class ReportServiceTests
     public async Task Administrator_is_unrestricted()
     {
         var (svc, q, _) = Make(Role.Administrator, Guid.NewGuid());
-        await svc.ByCourtAsync(new ReportFilter(), CancellationToken.None);
+        await svc.ByCourtAsync(Range, CancellationToken.None);
 
         Assert.Null(q.LastScope!.CreatedById);
         Assert.Null(q.LastScope.AssignedCopyistId);
@@ -36,7 +39,7 @@ public class ReportServiceTests
     {
         var court = Guid.NewGuid();
         var (svc, q, user) = Make(Role.Reviewer, court);
-        await svc.SummaryAsync(new ReportFilter(), CancellationToken.None);
+        await svc.SummaryAsync(Range, CancellationToken.None);
 
         Assert.Equal(user.Id, q.LastScope!.ApprovedById);
         Assert.Null(q.LastScope.AssignedCopyistId);
@@ -48,7 +51,7 @@ public class ReportServiceTests
     public async Task Copyist_scoped_to_self()
     {
         var (svc, q, user) = Make(Role.Copyist, Guid.NewGuid());
-        await svc.ByRoomAsync(new ReportFilter(), CancellationToken.None);
+        await svc.ByRoomAsync(Range, CancellationToken.None);
 
         Assert.Equal(user.Id, q.LastScope!.AssignedCopyistId);
         Assert.Null(q.LastScope.ApprovedById);
@@ -59,7 +62,7 @@ public class ReportServiceTests
     {
         var court = Guid.NewGuid();
         var (svc, q, user) = Make(Role.RegistryHead, court);
-        await svc.TurnaroundAsync(new ReportFilter(), CancellationToken.None);
+        await svc.TurnaroundAsync(Range, CancellationToken.None);
 
         Assert.Equal(user.Id, q.LastScope!.CreatedById);
         Assert.Equal(new[] { court }, q.LastScope.CourtIds);
@@ -71,7 +74,7 @@ public class ReportServiceTests
         var (svc, q, _) = Make(Role.Reviewer, Guid.NewGuid());
         // Reviewer tries to query another reviewer's / a copyist's data.
         await svc.ByCopyistAsync(
-            new ReportFilter(CopyistId: Guid.NewGuid(), ReviewerId: Guid.NewGuid()), CancellationToken.None);
+            Range with { CopyistId = Guid.NewGuid(), ReviewerId = Guid.NewGuid() }, CancellationToken.None);
 
         Assert.Null(q.LastFilter!.CopyistId);   // stripped
         Assert.Null(q.LastFilter.ReviewerId);   // stripped
@@ -82,7 +85,7 @@ public class ReportServiceTests
     {
         var copyist = Guid.NewGuid();
         var (svc, q, _) = Make(Role.Administrator);
-        await svc.ByCopyistAsync(new ReportFilter(CopyistId: copyist), CancellationToken.None);
+        await svc.ByCopyistAsync(Range with { CopyistId = copyist }, CancellationToken.None);
 
         Assert.Equal(copyist, q.LastFilter!.CopyistId);
     }
@@ -91,10 +94,31 @@ public class ReportServiceTests
     public async Task Copies_pagesize_is_clamped()
     {
         var (svc, q, _) = Make(Role.Administrator);
-        var res = await svc.CopiesAsync(new ReportFilter(), page: 0, pageSize: 99999, CancellationToken.None);
+        var res = await svc.CopiesAsync(Range, page: 0, pageSize: 99999, CancellationToken.None);
 
         Assert.Equal(1, res.Page);        // page floored to 1
         Assert.Equal(50, res.PageSize);   // oversized pageSize reset to default
+    }
+
+    [Fact]
+    public async Task Reports_require_a_date_range()
+    {
+        var (svc, _, _) = Make(Role.Administrator);
+        // No FromDate/ToDate → rejected before any query runs.
+        await Assert.ThrowsAsync<DomainException>(() => svc.ByCourtAsync(new ReportFilter(), CancellationToken.None));
+        await Assert.ThrowsAsync<DomainException>(() => svc.ByCourtAsync(new ReportFilter(FromDate: new DateOnly(2026, 6, 1)), CancellationToken.None));
+        await Assert.ThrowsAsync<DomainException>(() => svc.CopiesAsync(new ReportFilter(), 1, 50, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Detail_reports_reject_an_over_wide_range()
+    {
+        var (svc, _, _) = Make(Role.Administrator);
+        var wide = new ReportFilter(FromDate: new DateOnly(2020, 1, 1), ToDate: new DateOnly(2026, 1, 1)); // ~6 years
+        await Assert.ThrowsAsync<DomainException>(() => svc.CopiesAsync(wide, 1, 50, CancellationToken.None));
+        await Assert.ThrowsAsync<DomainException>(() => svc.JudgeWorkLogAsync(wide, 1, 50, CancellationToken.None));
+        // An aggregate report has no span cap — the same wide range is accepted.
+        await svc.ByCourtAsync(wide, CancellationToken.None);
     }
 
     [Fact]
@@ -112,14 +136,14 @@ public class ReportServiceTests
     {
         var court = Guid.NewGuid();
         var (svc, q, user) = Make(Role.Reviewer, court);
-        await svc.JudgeWorkLogAsync(new ReportFilter(CopyistId: Guid.NewGuid()), CancellationToken.None);
+        await svc.JudgeWorkLogAsync(Range with { CopyistId = Guid.NewGuid() }, page: 1, pageSize: 50, CancellationToken.None);
 
         Assert.Equal(user.Id, q.LastScope!.ApprovedById);       // scoped to self
         Assert.Equal(new[] { court }, q.LastScope.CourtIds);    // scoped to their courts
         Assert.Null(q.LastFilter!.CopyistId);                   // client actor filter stripped
 
         var bad = new ReportFilter(FromDate: new DateOnly(2026, 6, 10), ToDate: new DateOnly(2026, 6, 1));
-        await Assert.ThrowsAsync<DomainException>(() => svc.JudgeWorkLogAsync(bad, CancellationToken.None));
+        await Assert.ThrowsAsync<DomainException>(() => svc.JudgeWorkLogAsync(bad, 1, 50, CancellationToken.None));
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using ResourceIQ.Jcs.Application.ReadModels;
+using ResourceIQ.Jcs.Application.Reports;
 using ResourceIQ.Jcs.Domain.Enums;
 
 namespace ResourceIQ.Jcs.Application.Abstractions;
@@ -6,7 +7,9 @@ namespace ResourceIQ.Jcs.Application.Abstractions;
 /// <summary>Read-only queries (projections to DTOs). Implemented in Infrastructure over EF.</summary>
 public interface IJcsQueries
 {
-    Task<IReadOnlyList<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, CancellationToken ct);
+    /// <summary>Priority-ordered (موقوف → مستعجل → عادي, then oldest) page of the work queue. Paged so the
+    /// Administrator's unscoped list never materializes the whole table (500k+).</summary>
+    Task<Paged<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, int page, int pageSize, CancellationToken ct);
     Task<CopyRequestDetail?> GetCopyRequestAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<AuditEntryDto>> GetAuditAsync(Guid copyRequestId, CancellationToken ct);
 

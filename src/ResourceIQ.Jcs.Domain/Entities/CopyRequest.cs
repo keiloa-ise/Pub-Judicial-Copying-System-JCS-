@@ -82,6 +82,12 @@ public class CopyRequest
 
     public CopyContent? Content { get; private set; }
 
+    /// <summary>Work-queue priority as a stored, indexable rank (0 = موقوف, 1 = مستعجل, 2 = عادي) so the
+    /// listing can order by (PriorityRank, CreatedUtc) via an index instead of a non-sargable CASE over
+    /// <see cref="Urgency"/>. Maintained by the database as a PERSISTED computed column — never set in
+    /// code (the private setter exists only for EF materialization).</summary>
+    public int PriorityRank { get; private set; }
+
     private CopyRequest() { } // EF
 
     /// <summary>

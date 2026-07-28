@@ -1,6 +1,7 @@
 using ResourceIQ.Jcs.Application.Abstractions;
 using ResourceIQ.Jcs.Application.Common;
 using ResourceIQ.Jcs.Application.ReadModels;
+using ResourceIQ.Jcs.Application.Reports;
 using ResourceIQ.Jcs.Application.Security;
 using ResourceIQ.Jcs.Domain.Enums;
 
@@ -17,10 +18,16 @@ public sealed class CopyRequestReadService(
     ICopyNumberAllocator copyAllocator,
     IMiscNumberAllocator miscAllocator)
 {
-    public Task<IReadOnlyList<CopyRequestListItem>> ListForCurrentUserAsync(
-        CopyRequestSearch search, CancellationToken ct)
+    /// <summary>Max page size for the work-queue listing — bounds the payload/DOM even when a client
+    /// asks for more.</summary>
+    public const int MaxListPageSize = 100;
+
+    public Task<Paged<CopyRequestListItem>> ListForCurrentUserAsync(
+        CopyRequestSearch search, int page, int pageSize, CancellationToken ct)
     {
         Guard.RequireAuthenticated(currentUser);
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize is < 1 or > MaxListPageSize ? 50 : pageSize;
 
         // FR-13: an explicit search state wins. Otherwise the reviewer's queue is UnderReview and the
         // copyist sees their own copies — but Approved copies appear in the copyist/reviewer queue ONLY
@@ -49,7 +56,7 @@ public sealed class CopyRequestReadService(
             FromReservation: search.FromReservation,
             ToReservation: search.ToReservation);
 
-        return queries.ListCopyRequestsAsync(filter, ct);
+        return queries.ListCopyRequestsAsync(filter, page, pageSize, ct);
     }
 
     /// <summary>
@@ -110,7 +117,7 @@ public sealed class CopyRequestReadService(
     /// of the chosen kind — مثبتة (Approved) or مسودة (any non-approved state). Available to the
     /// Administrator, and to the Registry Head (their courts) when ALLOW_HEAD_BATCH_PRINT is on.
     /// A read-only administrative export: NOT subject to the single-print order/once rules; never marks printed.</summary>
-    public Task<IReadOnlyList<CopyRequestListItem>> ListBatchPrintAsync(
+    public async Task<IReadOnlyList<CopyRequestListItem>> ListBatchPrintAsync(
         Guid courtId, Guid roomId, DateOnly from, DateOnly to, bool approved, CancellationToken ct)
     {
         if (currentUser.Role == Role.Administrator)
@@ -131,7 +138,8 @@ public sealed class CopyRequestReadService(
             : [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];
         var filter = new CopyRequestFilter(
             States: states, CourtIds: [courtId], RoomId: roomId, FromReservation: from, ToReservation: to);
-        return queries.ListCopyRequestsAsync(filter, ct);
+        // A single court+room+date-range set is bounded; print ALL matching copies (no paging).
+        return (await queries.ListCopyRequestsAsync(filter, 1, int.MaxValue, ct)).Items;
     }
 
     /// <summary>FR-03/FR-06: the last sequential number issued for a court/room scope in the current

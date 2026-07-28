@@ -17,42 +17,50 @@ namespace ResourceIQ.Jcs.Application.Reports;
 public sealed class ReportService(ICurrentUser currentUser, IReportQueries queries)
 {
     private const int MaxPageSize = 200;
+    /// <summary>Upper bound on rows pulled for a file export (detail reports), so a download stays
+    /// bounded even within the allowed date range. Larger than a screen page, far below "the whole table".</summary>
+    private const int MaxExportRows = 20_000;
 
     public Task<ReportSummaryDto> SummaryAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.SummaryAsync(Scope(), Safe(filter), ct);
+        queries.SummaryAsync(Scope(), Require(filter), ct);
 
     public Task<IReadOnlyList<CountRow>> ByCourtAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CountByCourtAsync(Scope(), Safe(filter), ct);
+        queries.CountByCourtAsync(Scope(), Require(filter), ct);
 
     public Task<IReadOnlyList<CountRow>> ByRoomAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CountByRoomAsync(Scope(), Safe(filter), ct);
+        queries.CountByRoomAsync(Scope(), Require(filter), ct);
 
     public Task<IReadOnlyList<CountRow>> ByCopyistAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CountByCopyistAsync(Scope(), Safe(filter), ct);
+        queries.CountByCopyistAsync(Scope(), Require(filter), ct);
 
     public Task<IReadOnlyList<CountRow>> ByReviewerAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CountByReviewerAsync(Scope(), Safe(filter), ct);
+        queries.CountByReviewerAsync(Scope(), Require(filter), ct);
 
     public Task<IReadOnlyList<CountRow>> ByHeadAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CountByHeadAsync(Scope(), Safe(filter), ct);
+        queries.CountByHeadAsync(Scope(), Require(filter), ct);
 
     public Task<IReadOnlyList<CountRow>> ByJudgeAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CountByJudgeAsync(Scope(), Safe(filter), ct);
+        queries.CountByJudgeAsync(Scope(), Require(filter), ct);
 
-    public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.JudgeWorkLogAsync(Scope(), Safe(filter), ct);
+    // Row-level detail reports additionally cap the range span so they can never scan a whole year+ at once.
+    public Task<Paged<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportFilter filter, int page, int pageSize, CancellationToken ct)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize is < 1 or > MaxPageSize ? 50 : pageSize;
+        return queries.JudgeWorkLogAsync(Scope(), Require(filter, MaxDetailRangeDays), page, pageSize, ct);
+    }
 
     public Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.CopyistAccuracyAsync(Scope(), Safe(filter), ct);
+        queries.CopyistAccuracyAsync(Scope(), Require(filter), ct);
 
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportFilter filter, CancellationToken ct) =>
-        queries.TurnaroundAsync(Scope(), Safe(filter), ct);
+        queries.TurnaroundAsync(Scope(), Require(filter), ct);
 
     public Task<Paged<CopyRowDto>> CopiesAsync(ReportFilter filter, int page, int pageSize, CancellationToken ct)
     {
         page = page < 1 ? 1 : page;
         pageSize = pageSize is < 1 or > MaxPageSize ? 50 : pageSize;
-        return queries.CopiesAsync(Scope(), Safe(filter), page, pageSize, ct);
+        return queries.CopiesAsync(Scope(), Require(filter, MaxDetailRangeDays), page, pageSize, ct);
     }
 
     // ── Scope (server-trusted, never from the request) ──
@@ -80,6 +88,23 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
         return currentUser.Role == Role.Administrator ? f : f with { CopyistId = null, ReviewerId = null };
     }
 
+    /// <summary>Max span (days) for the row-level detail reports (تفاصيل النسخ، سجل القضاة) — a bounded
+    /// window so they can never scan an unbounded date range at 500k+ rows.</summary>
+    private const int MaxDetailRangeDays = 366;
+
+    /// <summary>Reports must not run without appropriate filters: a bounded date range (من/إلى) is
+    /// mandatory for EVERY report, enforced server-side (the client guard is only a convenience). The
+    /// heavy detail reports also cap the span. Runs through <see cref="Safe"/> first (order + actor strip).</summary>
+    private ReportFilter Require(ReportFilter f, int? maxSpanDays = null)
+    {
+        var safe = Safe(f);
+        if (safe.FromDate is not { } from || safe.ToDate is not { } to)
+            throw new DomainException("يجب تحديد المدى التاريخي (من/إلى) قبل تشغيل التقرير.");
+        if (maxSpanDays is { } max && to.DayNumber - from.DayNumber > max)
+            throw new DomainException($"المدى التاريخي كبير جدًا؛ الحد الأقصى {max} يومًا. الرجاء تضييق الفترة.");
+        return safe;
+    }
+
     // ── Export: build a flat table for a report type (all matching rows; no paging) ──
     public async Task<ReportTable> BuildTableAsync(ReportType type, ReportFilter filter, CancellationToken ct)
     {
@@ -98,13 +123,15 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
             case ReportType.ByJudge:
                 return CountTable("تقرير النسخ حسب القاضي (تقريبي)", "القاضي", await ByJudgeAsync(filter, ct));
             case ReportType.JudgeWorkLog:
-                return JudgeWorkLogTable(await JudgeWorkLogAsync(filter, ct));
+                // Export the full (bounded) range, not just one screen page — cap for safety.
+                var log = await queries.JudgeWorkLogAsync(Scope(), Require(filter, MaxDetailRangeDays), 1, MaxExportRows, ct);
+                return JudgeWorkLogTable(log.Items);
             case ReportType.CopyistAccuracy:
                 return CopyistAccuracyTable(await CopyistAccuracyAsync(filter, ct));
             case ReportType.Turnaround:
                 return TurnaroundTable(await TurnaroundAsync(filter, ct));
             case ReportType.Copies:
-                var rows = await CopiesAsync(filter, 1, MaxPageSize, ct);
+                var rows = await queries.CopiesAsync(Scope(), Require(filter, MaxDetailRangeDays), 1, MaxExportRows, ct);
                 return CopiesTable(rows.Items);
             default:
                 throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown report type.");

@@ -163,7 +163,7 @@ export const api = {
   logout: () => request<void>("/api/auth/logout", { method: "POST" }).catch(() => {}),
 
   // ── Copy requests ──
-  listRequests: (search?: RequestSearch) => {
+  listRequests: (search?: RequestSearch, page = 1, pageSize = 50) => {
     const p = new URLSearchParams();
     if (search?.state) p.set("state", search.state);
     if (search?.copyNumber) p.set("copyNumber", search.copyNumber);
@@ -171,8 +171,8 @@ export const api = {
     if (search?.courtId) p.set("courtId", search.courtId);
     if (search?.fromReservation) p.set("fromReservation", search.fromReservation);
     if (search?.toReservation) p.set("toReservation", search.toReservation);
-    const qs = p.toString();
-    return request<CopyRequestListItem[]>(`/api/copy-requests${qs ? `?${qs}` : ""}`);
+    p.set("page", String(page)); p.set("pageSize", String(pageSize));
+    return request<Paged<CopyRequestListItem>>(`/api/copy-requests?${p.toString()}`);
   },
   getRequest: (id: string) => request<CopyRequestDetail>(`/api/copy-requests/${id}`),
   getAudit: (id: string) => request<AuditEntry[]>(`/api/copy-requests/${id}/audit`),
@@ -263,7 +263,10 @@ export const api = {
     byReviewer: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-reviewer?${reportParams(f)}`),
     byHead: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-head?${reportParams(f)}`),
     byJudge: (f: ReportFilter) => request<CountRow[]>(`/api/reports/by-judge?${reportParams(f)}`),
-    judgeWorkLog: (f: ReportFilter) => request<JudgeWorkLogRow[]>(`/api/reports/judge-work-log?${reportParams(f)}`),
+    judgeWorkLog: (f: ReportFilter, page: number, pageSize: number) => {
+      const p = reportParams(f); p.set("page", String(page)); p.set("pageSize", String(pageSize));
+      return request<Paged<JudgeWorkLogRow>>(`/api/reports/judge-work-log?${p}`);
+    },
     copyistAccuracy: (f: ReportFilter) => request<CopyistAccuracyRow[]>(`/api/reports/copyist-accuracy?${reportParams(f)}`),
     turnaround: (f: ReportFilter) => request<TurnaroundReport>(`/api/reports/turnaround?${reportParams(f)}`),
     copies: (f: ReportFilter, page: number, pageSize: number) => {

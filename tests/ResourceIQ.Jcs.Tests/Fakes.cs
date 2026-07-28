@@ -155,7 +155,7 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<MiscNumberCounterDto>>([]);
 
-    public Task<IReadOnlyList<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, CancellationToken ct) => throw new NotImplementedException();
+    public Task<Paged<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, int page, int pageSize, CancellationToken ct) => throw new NotImplementedException();
     public Task<CopyRequestDetail?> GetCopyRequestAsync(Guid id, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<AuditEntryDto>> GetAuditAsync(Guid copyRequestId, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<CourtDto>> ListCourtsAsync(IReadOnlyCollection<Guid>? restrictTo, bool activeOnly, CancellationToken ct) => throw new NotImplementedException();
@@ -194,8 +194,8 @@ internal sealed class FakeReportQueries : IReportQueries
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
     public Task<IReadOnlyList<CountRow>> CountByJudgeAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture<IReadOnlyList<CountRow>>(scope, filter, []));
-    public Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
-        Task.FromResult(Capture<IReadOnlyList<JudgeWorkLogRow>>(scope, filter, []));
+    public Task<Paged<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct) =>
+        Task.FromResult(Capture(scope, filter, new Paged<JudgeWorkLogRow>([], 0, page, pageSize)));
     public Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>
         Task.FromResult(Capture<IReadOnlyList<CopyistAccuracyRow>>(scope, filter, []));
     public Task<TurnaroundReportDto> TurnaroundAsync(ReportScope scope, ReportFilter filter, CancellationToken ct) =>

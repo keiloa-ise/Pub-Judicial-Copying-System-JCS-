@@ -50,8 +50,10 @@ public sealed class ReportsController(
 
     /// <summary>FR-13: per-judge work log between two reservation dates (row per decision, any state).</summary>
     [HttpGet("judge-work-log")]
-    public async Task<IActionResult> JudgeWorkLog([FromQuery] ReportFilter filter, CancellationToken ct) =>
-        Ok(await reports.JudgeWorkLogAsync(filter, ct));
+    public async Task<IActionResult> JudgeWorkLog(
+        [FromQuery] ReportFilter filter, [FromQuery] int page = 1, [FromQuery] int pageSize = 50,
+        CancellationToken ct = default) =>
+        Ok(await reports.JudgeWorkLogAsync(filter, page, pageSize, ct));
 
     /// <summary>FR-13 (JC-58): per-copyist writing-accuracy log — words corrected after each return and
     /// the cumulative correction rate. Scoped to the caller's courts (copyist sees only self).</summary>

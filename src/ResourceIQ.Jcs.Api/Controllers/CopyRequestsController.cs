@@ -46,10 +46,12 @@ public sealed class CopyRequestsController(
         [FromQuery] Guid? courtId,
         [FromQuery] DateOnly? fromReservation,
         [FromQuery] DateOnly? toReservation,
-        CancellationToken ct)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken ct = default)
     {
         var search = new CopyRequestSearch(state, copyNumber, caseBaseNumber, courtId, fromReservation, toReservation);
-        return Ok(await readService.ListForCurrentUserAsync(search, ct));
+        return Ok(await readService.ListForCurrentUserAsync(search, page, pageSize, ct));
     }
 
     /// <summary>Full detail (incl. content) for one request, if the caller may view it.</summary>

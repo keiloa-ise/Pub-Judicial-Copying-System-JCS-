@@ -199,7 +199,7 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
         }
     }
 
-    public async Task<IReadOnlyList<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, CancellationToken ct)
+    public async Task<Paged<JudgeWorkLogRow>> JudgeWorkLogAsync(ReportScope scope, ReportFilter filter, int page, int pageSize, CancellationToken ct)
     {
         // This report's date basis is تاريخ الحجز (ReservationDate), not creation — so bypass Base's
         // CreatedUtc date filter (keep its scope + court/room/status) and range on ReservationDate here.
@@ -207,7 +207,13 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
         if (filter.FromDate is { } fd) q = q.Where(x => x.ReservationDate >= fd);
         if (filter.ToDate is { } td) q = q.Where(x => x.ReservationDate <= td);
 
-        var rows = await (from cr in q
+        // Page at the DECISION level (not the expanded judge-row level) so the query never materializes
+        // every decision in the range. Total counts decisions; each yields one row per panel member.
+        var total = await q.CountAsync(ct);
+        var pageQ = q.OrderBy(x => x.ReservationDate).ThenBy(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize);
+
+        var decisions = await (from cr in pageQ
                           join c in db.Courts on cr.CourtId equals c.Id
                           join rm in db.Rooms on cr.RoomId equals rm.Id
                           join cc in db.CopyContents on cr.Id equals cc.CopyRequestId into ccj
@@ -220,7 +226,7 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
                           }).ToListAsync(ct);
 
         var result = new List<JudgeWorkLogRow>();
-        foreach (var r in rows)
+        foreach (var r in decisions)
         {
             var (decisionNumber, participants) = ParsePanel(r.Json);
             foreach (var p in participants)
@@ -228,7 +234,8 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
                     p.Name, r.CopyNumber, r.MiscNumber, decisionNumber, r.CourtName, r.RoomName,
                     r.ReservationDate, r.State, p.Role, p.Delegated, p.DelegationNumber, p.DelegationDate));
         }
-        return result.OrderBy(x => x.JudgeName).ThenBy(x => x.ReservationDate).ToList();
+        var rows = result.OrderBy(x => x.JudgeName).ThenBy(x => x.ReservationDate).ToList();
+        return new Paged<JudgeWorkLogRow>(rows, total, page, pageSize);
     }
 
     public async Task<IReadOnlyList<CopyistAccuracyRow>> CopyistAccuracyAsync(ReportScope scope, ReportFilter filter, CancellationToken ct)
