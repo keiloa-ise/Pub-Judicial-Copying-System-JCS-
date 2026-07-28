@@ -13,8 +13,9 @@ public sealed record PrintManyCommand(IReadOnlyList<Guid> CopyRequestIds);
 /// FR-15 print queues. Two role-specific queues of decisions awaiting print:
 ///   • Reviewer — Approved but not-yet-printed decisions in the reviewer's courts (cumulative selection).
 ///   • Copyist  — the copyist's ACCEPTED, in-preparation, not-yet-printed decisions (arbitrary selection).
-/// Printing a selected set records each print (audited), which marks the copies printed so they leave
-/// the queue; the API renders the selected decisions into one merged PDF.
+/// Printing a selected set records each print (audited) and the API renders the selected decisions into
+/// one merged PDF. Reviewer-queue items are marked printed and leave the queue; copyist-queue items are
+/// NOT marked, so they stay in the queue and can be re-printed until the copy is submitted/approved.
 /// </summary>
 public sealed class PrintQueueService(
     ICurrentUser currentUser,
@@ -51,7 +52,11 @@ public sealed class PrintQueueService(
                 var request = await repository.GetAsync(id, token)
                               ?? throw new NotFoundException("Copy request not found.");
                 AuthorizeQueueItem(request);
-                request.MarkPrinted(currentUser.Id, clock.UtcNow);
+                // Reviewer queue (Approved): printing marks the copy printed → it LEAVES the queue.
+                // Copyist queue (in-preparation draft): printing does NOT mark it, so the decision
+                // STAYS in the copyist's queue and can be re-printed until it is submitted/approved.
+                if (request.State == CopyState.Approved)
+                    request.MarkPrinted(currentUser.Id, clock.UtcNow);
                 audit.Append(request.Id, AuditAction.Print);
             }
             await unitOfWork.SaveChangesAsync(token);

@@ -18,7 +18,8 @@ function printBlob(blob: Blob) {
  * - Reviewer (`mode="reviewer"`): Approved, not-yet-printed decisions, priority-ordered. Selection is
  *   **cumulative** — checking decision #N selects 1..N (reflecting the strict print order).
  * - Copyist (`mode="copyist"`): the copyist's accepted, in-preparation decisions. Selection is **arbitrary**.
- * Printing the selection renders ONE merged PDF (printed directly) and removes those decisions from the queue.
+ * Printing the selection renders ONE merged PDF (printed directly). Reviewer decisions then leave the
+ * queue; copyist decisions stay in the queue and remain re-printable until the copy is submitted/approved.
  */
 export function PrintQueuePage({ mode }: { mode: "reviewer" | "copyist" }) {
   const L = useL();
@@ -59,7 +60,10 @@ export function PrintQueuePage({ mode }: { mode: "reviewer" | "copyist" }) {
     try {
       const blob = await api.printQueue.print(ids);
       printBlob(blob);
-      setOk(L(`تمت طباعة ${ids.length} قرار وإزالتها من الرتل.`, `Printed ${ids.length} decision(s); removed from the queue.`));
+      // Reviewer queue items leave the queue after printing; copyist queue items remain (re-printable).
+      setOk(mode === "reviewer"
+        ? L(`تمت طباعة ${ids.length} قرار وإزالتها من الرتل.`, `Printed ${ids.length} decision(s); removed from the queue.`)
+        : L(`تمت طباعة ${ids.length} قرار. تبقى في الرتل.`, `Printed ${ids.length} decision(s); they remain in the queue.`));
       await load();
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
