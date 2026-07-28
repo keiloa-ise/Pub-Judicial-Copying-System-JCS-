@@ -1,6 +1,11 @@
+using System.Text.Json;
 using ResourceIQ.Jcs.Domain.Enums;
 
 namespace ResourceIQ.Jcs.Api.Contracts;
+
+// JC-32: recoverable form-draft payload (opaque JSON) + response.
+public sealed record FormDraftRequest(JsonElement Payload, Guid? CopyRequestId);
+public sealed record FormDraftResponse(string FormKey, string Role, Guid? CopyRequestId, JsonElement Payload, DateTimeOffset UpdatedAt);
 
 // Request DTOs — validated at the API boundary; domain rules stay in the service layer.
 

@@ -34,6 +34,10 @@ export type CaseUrgency = "Normal" | "Suspended" | "Expedited";
 export interface LoginResult { token: string; userId: string; displayName: string; role: Role; }
 /** FR-15 feature flags (both default true). Server enforces; the SPA uses these only to hide options. */
 export interface FeatureFlags { allowCopyistReprint: boolean; allowHeadBatchPrint: boolean; }
+/** JC-32: a recoverable form draft returned by the server. */
+export interface FormDraft<TPayload = unknown> {
+  formKey: string; role: string; copyRequestId: string | null; payload: TPayload; updatedAt: string;
+}
 
 export interface CopyRequestListItem {
   id: string; copyNumber: string | null; state: CopyState;
@@ -264,6 +268,16 @@ export const api = {
 
   // ── Feature flags (server-authoritative; used to hide role-gated UI) ──
   config: () => request<FeatureFlags>("/api/config"),
+
+  // ── JC-32 recoverable form drafts (per user + form key) ──
+  getFormDraft: <TPayload = unknown>(formKey: string) =>
+    request<FormDraft<TPayload> | null>(`/api/form-drafts/${encodeURIComponent(formKey)}`),
+  upsertFormDraft: <TPayload = unknown>(formKey: string, payload: TPayload, copyRequestId?: string | null) =>
+    request<FormDraft<TPayload>>(`/api/form-drafts/${encodeURIComponent(formKey)}`, {
+      method: "PUT", body: JSON.stringify({ payload, copyRequestId: copyRequestId ?? null }),
+    }),
+  deleteFormDraft: (formKey: string) =>
+    request<void>(`/api/form-drafts/${encodeURIComponent(formKey)}`, { method: "DELETE" }),
 
   // ── FR-15 print queues ──
   printQueue: {

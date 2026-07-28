@@ -32,6 +32,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 // Server-side judgment PDF rendering (FR-15). Stateless + thread-safe → singleton.
 builder.Services.AddSingleton<ResourceIQ.Jcs.Api.Pdf.JudgmentPdfService>();
+builder.Services.AddHostedService<ResourceIQ.Jcs.Api.Bootstrap.FormDraftCleanupBackgroundService>(); // JC-32 stale-draft cleanup
 
 // ── AuthN ─────────────────────────────────────────────────────────────────
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();

@@ -405,6 +405,28 @@ reply stating the majority's position, signed by the replying judges.
   dissent exists the reply flags are cleared on save. Both are **backward-compatible** — existing copies
   carry no reply.
 
+### FR-21 — Auto-save draft recovery (JC-32, انقطاع الكهرباء)
+Long forms (creating a request, preparing/correcting a copy) auto-save their in-progress state so a power
+outage, tab crash, or expired session never loses unsent work. Drafts are **transient recovery data**,
+scoped per user + form, and are **never** part of the legal record. See `docs/auto-save-draft.md`.
+**Acceptance:**
+- **Local save:** the form payload is written to `localStorage` (debounced ~500 ms) so it survives a
+  reload / power loss.
+- **Server sync:** the local draft is synced to the server (`FormDrafts` table) periodically
+  (~10 s, configurable via `VITE_AUTO_SAVE_DRAFT_SYNC_INTERVAL_MS`) and on reconnect; last-write-wins is
+  resolved by the **server clock** (`UpdatedUtc`).
+- **Restore:** on return the newest of the local/server draft is offered — *«توجد مسودة محفوظة، هل تريد
+  استرجاعها؟»* — the decision is cached so it is not re-asked.
+- **Scoping & authorization:** a draft is always keyed to `UserId` (a crafted form key cannot reach
+  another user's row); a copy-tied draft is allowed only for the role that may edit that copy in its
+  current state (assigned Copyist while editable; Reviewer while under review).
+- **Size guard:** payload is capped at **256 KB** — enforced in the entity, the service, and a DB
+  `CHECK` constraint.
+- **Local-copy deletion is event-driven** (NOT scheduled): cleared on submit/approve, on decline-restore,
+  and — for shared-machine confidentiality — on **logout** (all local drafts wiped).
+- **Server-copy cleanup is scheduled:** a lightweight background service (`PeriodicTimer`, no external job
+  framework) deletes drafts older than **30 days** (`FormDraftCleanup:{Enabled,OlderThanDays,IntervalHours}`).
+
 ## 8. Non-functional requirements
 
 ### Security

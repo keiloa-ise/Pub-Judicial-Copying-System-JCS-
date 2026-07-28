@@ -4,6 +4,7 @@ import { useNav } from "../../app/nav";
 import { useL, StateBadge, Spinner, ErrorBox, auditLabels, categoryLabels, urgencyLabels } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { useConfig } from "../../app/useConfig";
+import { clearLocalFormDraft } from "../../hooks/useAutoSaveDraft";
 import { useI18n } from "../../i18n";
 
 // FR-13: stage names for the per-stage timeline — the stage that FOLLOWS each audit action.
@@ -55,6 +56,14 @@ export function RequestDetailPage({ id }: { id: string }) {
   function goPrint(auto: boolean) {
     if (auto) sessionStorage.setItem("jcs_autoprint_id", id);
     navigate("print", id);
+  }
+
+  // JC-32: once a reviewer approves or returns a copy, their correction draft is no longer needed.
+  async function clearReviewerDraft() {
+    if (user?.role !== "Reviewer") return;
+    const key = `reviewer:correct-copy:${id}:${user.userId}`;
+    clearLocalFormDraft(user.userId, key);
+    try { await api.deleteFormDraft(key); } catch { /* cleanup must not block the workflow */ }
   }
 
   if (err && !detail) return <ErrorBox message={err} />;
@@ -217,11 +226,11 @@ export function RequestDetailPage({ id }: { id: string }) {
         {user?.role === "Reviewer" && detail.state === "UnderReview" && (
           <>
             {/* FR-15 item 1: approval no longer auto-prints; the approved decision enters the reviewer print queue. */}
-            <button className="btn" disabled={busy} onClick={() => act(() => api.approve(detail.id))}>{L("اعتماد", "Approve")}</button>
+            <button className="btn" disabled={busy} onClick={() => act(async () => { await api.approve(detail.id); await clearReviewerDraft(); })}>{L("اعتماد", "Approve")}</button>
             <button className="btn" disabled={busy} onClick={() => navigate("prepare", detail.id)}>{L("تصحيح مباشر", "Correct directly")}</button>
             <button className="btn btn--ghost" disabled={busy} onClick={() => {
               const c = window.prompt(L("سبب الإعادة للتصحيح:", "Corrections / reason for return:")) ?? "";
-              if (c.trim()) act(() => api.returnForCorrection(detail.id, c.trim()));
+              if (c.trim()) act(async () => { await api.returnForCorrection(detail.id, c.trim()); await clearReviewerDraft(); });
             }}>{L("إعادة للتصحيح", "Return for correction")}</button>
           </>
         )}

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { api, setToken, type LoginResult } from "../api/client";
+import { clearAllLocalFormDrafts } from "../hooks/useAutoSaveDraft";
 
 /** Holds the authenticated session. The JWT lives in memory only (not localStorage) so it
  *  isn't exposed to XSS-readable storage; a refresh logs out — acceptable for this scaffold. */
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     api.logout();        // clear the HttpOnly PDF cookie server-side (best-effort)
+    clearAllLocalFormDrafts(); // JC-32: never leave a user's draft content on a shared machine
     setToken(null);
     setUser(null);
   }, []);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   api, type CopyRequestDetail, type FormTemplate, type ParagraphTemplate,
   type AuditEntry, type Lookup, type PanelMember,
@@ -6,6 +6,7 @@ import {
 import { useNav } from "../../app/nav";
 import { useL, Spinner, ErrorBox } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
+import { useAutoSaveDraft } from "../../hooks/useAutoSaveDraft";
 import { RichText, plainToHtml } from "../../components/RichText";
 
 /** Known header field keys whose Hijri value is auto-derived from the Gregorian date (FR-09).
@@ -40,6 +41,15 @@ const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&nbsp;
 /** Client-only stable ids for section editor rows (keep rich-text instances stable on reorder). */
 let _sid = 0;
 const nextSid = () => ++_sid;
+
+// JC-32 draft (de)serialization for the editor's sections/values.
+const toDraft = (items: EditSection[]) => items.map(({ title, text }) => ({ title, text }));
+const fromDraftSections = (v: unknown): EditSection[] =>
+  Array.isArray(v) ? v.map((s) => ({ id: nextSid(), title: typeof s?.title === "string" ? s.title : "", text: typeof s?.text === "string" ? s.text : "" })) : [];
+const fromDraftValues = (v: unknown): Record<string, string> =>
+  v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).map(([k, val]) => [k, typeof val === "string" ? val : String(val ?? "")]))
+    : {};
 interface EditSection { id: number; title: string; text: string; }
 
 /** Convert a Gregorian "yyyy-MM-dd" (from <input type=date>) to a Hijri "dd/MM/yyyy" string
@@ -219,6 +229,29 @@ export function PreparePage({ id }: { id: string }) {
     api.lookupParagraphs(formTemplateId).then(setParagraphs).catch(() => setParagraphs([]));
   }, [formTemplateId]);
 
+  // JC-32: auto-save/restore the edit form (copyist prepare OR reviewer correct). Hook runs
+  // unconditionally (before the early returns) — flags derive from detail?/user? so it's safe.
+  const rc = user?.role === "Reviewer" && detail?.state === "UnderReview";
+  const ce = user?.role === "Copyist" && (detail?.state === "InPreparation" || detail?.state === "Unlocked");
+  const draftFormKey = user && detail
+    ? rc ? `reviewer:correct-copy:${id}:${user.userId}` : ce ? `copyist:prepare-copy:${id}:${user.userId}` : null
+    : null;
+  const draftPayload = useMemo(() => ({
+    formTemplateId, values, sections: toDraft(sections), dissentSections: toDraft(dissentSections), rebuttalSections: toDraft(rebuttalSections),
+  }), [formTemplateId, values, sections, dissentSections, rebuttalSections]);
+  const autoSave = useAutoSaveDraft({
+    userId: user?.userId, role: user?.role, formKey: draftFormKey, copyRequestId: id,
+    payload: draftPayload, enabled: !!detail && (rc || ce),
+    restorePrompt: L("توجد مسودة محفوظة لهذا القرار. هل تريد استرجاعها؟", "A saved draft exists for this copy. Restore it?"),
+    onRestore: (p) => {
+      setFormTemplateId(typeof p.formTemplateId === "string" ? p.formTemplateId : "");
+      setValues(fromDraftValues(p.values));
+      setSections(fromDraftSections(p.sections));
+      setDissentSections(fromDraftSections(p.dissentSections));
+      setRebuttalSections(fromDraftSections(p.rebuttalSections));
+    },
+  });
+
   if (err && !detail) return <ErrorBox message={err} />;
   if (!detail) return <Spinner label={L("جارٍ التحميل…", "Loading…")} />;
 
@@ -345,6 +378,7 @@ export function PreparePage({ id }: { id: string }) {
       if (reviewerCorrecting) await api.correct(id, payload); else await api.saveDraft(id, payload);
       if (finalize) {
         if (reviewerCorrecting) await api.approve(id); else await api.submit(id);
+        await autoSave.clearDraft(); // JC-32: committed — drop the recovery draft
         navigate("request", id);
         return;
       }

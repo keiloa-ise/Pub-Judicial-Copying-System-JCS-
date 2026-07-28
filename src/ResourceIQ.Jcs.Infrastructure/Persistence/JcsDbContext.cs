@@ -27,6 +27,7 @@ public sealed class JcsDbContext(DbContextOptions<JcsDbContext> options) : DbCon
     public DbSet<FormTemplate> FormTemplates => Set<FormTemplate>();
     public DbSet<FormField> FormFields => Set<FormField>();
     public DbSet<ParagraphTemplate> ParagraphTemplates => Set<ParagraphTemplate>();
+    public DbSet<FormDraft> FormDrafts => Set<FormDraft>();
 
     /// <summary>
     /// Audit entries. Exposed read-only on purpose — there is no public mutable DbSet and no

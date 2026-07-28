@@ -182,6 +182,23 @@ public sealed class FormFieldConfiguration : IEntityTypeConfiguration<FormField>
     }
 }
 
+/// <summary>JC-32: recoverable form drafts — one per (user, form key), with a DB size guard.</summary>
+public sealed class FormDraftConfiguration : IEntityTypeConfiguration<FormDraft>
+{
+    public void Configure(EntityTypeBuilder<FormDraft> b)
+    {
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Role).HasMaxLength(50).IsRequired();
+        b.Property(x => x.FormKey).HasMaxLength(200).IsRequired();
+        b.Property(x => x.PayloadJson).IsRequired();
+        b.HasIndex(x => new { x.UserId, x.FormKey }).IsUnique(); // one draft per user + form
+        b.HasIndex(x => x.UpdatedUtc);                            // cleanup by age
+        b.ToTable(t => t.HasCheckConstraint(
+            "CK_FormDrafts_PayloadJson_MaxLength",
+            $"DATALENGTH([PayloadJson]) <= {FormDraft.MaxPayloadJsonBytes}"));
+    }
+}
+
 public sealed class ParagraphTemplateConfiguration : IEntityTypeConfiguration<ParagraphTemplate>
 {
     public void Configure(EntityTypeBuilder<ParagraphTemplate> b)

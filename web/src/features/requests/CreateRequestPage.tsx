@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption, type LastNumber } from "../../api/client";
 import { useNav } from "../../app/nav";
 import { useL, ErrorBox, categoryLabels, urgencyLabels } from "../../app/ui";
+import { useAuth } from "../../auth/AuthContext";
+import { useAutoSaveDraft } from "../../hooks/useAutoSaveDraft";
 import { useI18n } from "../../i18n";
+
+const asStr = (v: unknown) => (typeof v === "string" ? v : "");
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
 
@@ -14,6 +18,7 @@ const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
  */
 export function CreateRequestPage() {
   const { navigate } = useNav();
+  const { user } = useAuth();
   const { lang } = useI18n();
   const L = useL();
   const ak = lang === "ar" ? "ar" : "en";
@@ -74,22 +79,40 @@ export function CreateRequestPage() {
     }
   }
 
-  // Copyists follow the selected court (both عادي and متفرق now pick court + room).
+  // Copyists/rooms LOAD from the selected court. Resets of dependent fields live in the select
+  // onChange handlers (pickCourt/pickRoom) — NOT here — so a draft-restore that sets state directly
+  // is never wiped by a cascade effect (JC-32).
   useEffect(() => {
-    setCopyistId("");
     if (!courtId) { setCopyists([]); return; }
     api.lookupCopyists(courtId).then(setCopyists).catch((e) => setErr(e.message));
   }, [courtId]);
-
-  // Rooms follow the selected court (for both عادي and متفرق). Reset the room when the court changes.
   useEffect(() => {
-    setRoomId("");
     if (!courtId) { setRooms([]); return; }
     api.lookupRooms(courtId).then(setRooms).catch((e) => setErr(e.message));
   }, [courtId]);
 
-  // A stale original from another court/room must never survive a court/room change.
-  useEffect(() => { setOriginalId(""); setOriginalSearch(""); }, [courtId, roomId]);
+  // User-driven selection changes reset dependent fields (a restore bypasses these by setting state directly).
+  function pickCourt(v: string) { setCourtId(v); setRoomId(""); setCopyistId(""); setOriginalId(""); setOriginalSearch(""); }
+  function pickRoom(v: string) { setRoomId(v); setOriginalId(""); setOriginalSearch(""); }
+
+  // JC-32: auto-save/restore the whole create form (Registry Head only). Restore sets state directly;
+  // because the reset logic lives in pickCourt/pickRoom (not effects), restored fields are never wiped.
+  const draftPayload = useMemo(() => ({
+    courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo,
+  }), [courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo]);
+  const autoSave = useAutoSaveDraft({
+    userId: user?.userId, role: user?.role,
+    formKey: user ? `registry-head:create-copy-request:${user.userId}` : null,
+    payload: draftPayload, enabled: user?.role === "RegistryHead",
+    restorePrompt: L("توجد مسودة محفوظة لهذا النموذج. هل تريد استرجاعها؟", "A saved draft exists for this form. Restore it?"),
+    onRestore: (p) => {
+      setCourtId(asStr(p.courtId)); setRoomId(asStr(p.roomId)); setOriginalId(asStr(p.originalId));
+      setOriginalSearch(asStr(p.originalSearch)); setCopyistId(asStr(p.copyistId)); setFilingDate(asStr(p.filingDate));
+      setCaseBase(asStr(p.caseBase)); setCategory(p.category === "Miscellaneous" ? "Miscellaneous" : "Normal");
+      setUrgency(p.urgency === "Suspended" || p.urgency === "Expedited" ? p.urgency : "Normal");
+      setExpediteNo(asStr(p.expediteNo)); setReferenceNo(asStr(p.referenceNo));
+    },
+  });
 
   // FR-03/FR-06: once court+room are chosen, show the last issued number for that scope this year.
   useEffect(() => {
@@ -116,6 +139,7 @@ export function CreateRequestPage() {
         referenceNumber: isMisc && referenceNo ? referenceNo : null,
         originalCopyId: isMisc ? originalId : null,
       });
+      await autoSave.clearDraft(); // JC-32: work is committed — drop the recovery draft
       navigate("request", res.id);
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -148,14 +172,14 @@ export function CreateRequestPage() {
         <div className="row">
           <label className="field">
             <span>{L("المحكمة", "Court")}</span>
-            <select value={courtId} onChange={(e) => setCourtId(e.target.value)} required>
+            <select value={courtId} onChange={(e) => pickCourt(e.target.value)} required>
               <option value="" disabled>{L("اختر المحكمة", "Select court")}</option>
               {courts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label className="field">
             <span>{L("الغرفة", "Room")}</span>
-            <select value={roomId} onChange={(e) => setRoomId(e.target.value)} required disabled={!courtId}>
+            <select value={roomId} onChange={(e) => pickRoom(e.target.value)} required disabled={!courtId}>
               <option value="" disabled>{L("اختر الغرفة", "Select room")}</option>
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}
             </select>
