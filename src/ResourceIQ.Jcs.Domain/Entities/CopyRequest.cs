@@ -213,6 +213,19 @@ public class CopyRequest
             throw new DomainException($"Copy is not editable in state {State} (BR-04).");
     }
 
+    /// <summary>One-time pre-fill at acceptance: seeds the fixed field values (specifically الهيئة الحاكمة
+    /// = المحكمة/الغرفة) into a freshly created content shell so the copyist opens the editor with the
+    /// chamber already populated but still editable. Requires the copy to be accepted and editable;
+    /// creates the content row if absent. Does NOT touch sections/body or the form template.</summary>
+    public void SeedFieldValuesOnAccept(string fieldValuesJson, DateTimeOffset nowUtc)
+    {
+        EnsureEditable();
+        EnsureAccepted();
+        Content ??= new CopyContent { CopyRequestId = Id };
+        Content.FieldValuesJson = string.IsNullOrWhiteSpace(fieldValuesJson) ? "{}" : fieldValuesJson;
+        UpdatedUtc = nowUtc;
+    }
+
     /// <summary>
     /// Replaces the editable content (form field values + legal body). Only permitted while
     /// in preparation (BR-04). Legal text is stored verbatim — never truncated or auto-corrected.

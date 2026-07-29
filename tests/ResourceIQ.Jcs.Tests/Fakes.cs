@@ -155,6 +155,8 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<IReadOnlyList<MiscNumberCounterDto>> ListMiscNumberCountersAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<MiscNumberCounterDto>>([]);
 
+    public CourtRoomNames? CourtRoomNames { get; set; }
+    public Task<CourtRoomNames?> GetCourtAndRoomNamesAsync(Guid courtId, Guid roomId, CancellationToken ct) => Task.FromResult(CourtRoomNames);
     public Task<Paged<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, int page, int pageSize, CancellationToken ct) => throw new NotImplementedException();
     public Task<CopyRequestDetail?> GetCopyRequestAsync(Guid id, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<AuditEntryDto>> GetAuditAsync(Guid copyRequestId, CancellationToken ct) => throw new NotImplementedException();

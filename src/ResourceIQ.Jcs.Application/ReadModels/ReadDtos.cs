@@ -152,6 +152,9 @@ public sealed record CopyRequestFilter(
     DateOnly? ToReservation = null,
     Guid? RoomId = null);
 
+/// <summary>Court + room display names for a copy (pre-fill of الهيئة الحاكمة at acceptance).</summary>
+public sealed record CourtRoomNames(string CourtName, string RoomName);
+
 /// <summary>Advanced-search inputs supplied by the user (narrow within their allowed scope).</summary>
 public sealed record CopyRequestSearch(
     CopyState? State = null,

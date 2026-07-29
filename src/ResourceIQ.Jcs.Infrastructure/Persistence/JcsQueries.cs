@@ -310,6 +310,13 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             .OrderBy(u => u.DisplayName)
             .Select(u => new LookupItem(u.Id, u.DisplayName)).ToListAsync(ct);
 
+    public async Task<CourtRoomNames?> GetCourtAndRoomNamesAsync(Guid courtId, Guid roomId, CancellationToken ct)
+    {
+        var court = await db.Courts.AsNoTracking().Where(c => c.Id == courtId).Select(c => c.Name).FirstOrDefaultAsync(ct);
+        var room = await db.Rooms.AsNoTracking().Where(r => r.Id == roomId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+        return court is null || room is null ? null : new CourtRoomNames(court, room);
+    }
+
     public async Task<IReadOnlyList<LookupItem>> ListJudgesByRoomAsync(Guid roomId, CancellationToken ct) =>
         await db.Judges.AsNoTracking()
             .Where(j => j.IsActive

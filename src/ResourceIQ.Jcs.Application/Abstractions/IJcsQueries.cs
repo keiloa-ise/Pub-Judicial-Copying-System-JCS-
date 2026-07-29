@@ -10,6 +10,9 @@ public interface IJcsQueries
     /// <summary>Priority-ordered (موقوف → مستعجل → عادي, then oldest) page of the work queue. Paged so the
     /// Administrator's unscoped list never materializes the whole table (500k+).</summary>
     Task<Paged<CopyRequestListItem>> ListCopyRequestsAsync(CopyRequestFilter filter, int page, int pageSize, CancellationToken ct);
+    /// <summary>The court and room display names for a copy — used to pre-fill الهيئة الحاكمة at
+    /// acceptance. Null if either is not found.</summary>
+    Task<CourtRoomNames?> GetCourtAndRoomNamesAsync(Guid courtId, Guid roomId, CancellationToken ct);
     Task<CopyRequestDetail?> GetCopyRequestAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<AuditEntryDto>> GetAuditAsync(Guid copyRequestId, CancellationToken ct);
 
