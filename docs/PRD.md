@@ -139,11 +139,15 @@ for the seeded rooms: جزائية → room level, all other courts → court le
 Administrator can create, edit, activate, and deactivate judges, and assign a judge to a court.
 **Acceptance:** judge assignable to one or more rooms; **judge name unique (global)** (BR-14).
 
-### FR-05 — Court assignment
-Administrator can assign courts to copyists and to reviewers.
-**Acceptance:** users only see courts assigned to them.
-**[OPEN]** The original PRD does not assign courts to Registry Heads, yet BR-06 scopes all
-users to assigned courts. Define how Registry Heads are scoped to courts.
+### FR-05 — Scope assignment (rooms / courts)
+Administrator assigns scope by role (BR-06): **rooms** to Copyists and Reviewers (one or more
+rooms, which may span several courts), and **courts** to Registry Heads. Administrators are
+unrestricted. Assignment is on the Users screen — a room picker (grouped by court) for
+copyist/reviewer, a court picker for the head.
+**Acceptance:** a Copyist/Reviewer sees and acts on copies only in their assigned rooms; a
+Registry Head only within their assigned courts; enforced server-side on every action.
+**[RESOLVED]** Registry Heads are court-scoped (via `UserCourt`); Copyists/Reviewers are
+room-scoped (via `UserRoom`), with their court scope derived from their rooms' courts.
 
 ### FR-06 — Create copy request
 Registry Head can select court and room, choose the assigned copyist, enter the case base
@@ -462,7 +466,7 @@ permanent audit log).
 | BR-03 | Only Reviewers may approve copies. |
 | BR-04 | Approved copies become read-only. |
 | BR-05 | Only Administrators may unlock approved copies. |
-| BR-06 | Users may only access courts assigned to them. |
+| BR-06 | Users may only access their assigned scope, by role: **Copyists and Reviewers are scoped to assigned ROOMS** (one or more rooms, which may span several courts; their court scope is derived from those rooms), **Registry Heads to assigned COURTS**, and **Administrators are unrestricted**. Enforced server-side on every action/list/report (`Guard.RequireCopyScope`), never a UI hide. Room assignments live in `UserRoom`; court assignments in `UserCourt`. |
 | BR-07 | Sequential copy numbers must be unique (scope per FR-06 [OPEN]). |
 | BR-08 | A Reviewer may correct content directly while a copy is *Under review* (in addition to returning it); such edits are audited (actor = Reviewer) and do not change the state. This is the only content-write exception to BR-02. |
 | BR-09 | A Registry Head may delete (via the deletion window) within their courts (FR-16; any state, incl. Approved): a **عادي** copy only if it is the court+year latest AND has **no linked متفرق** (else it would orphan them); or a **متفرق** only if it is the last in its numbering scope. Copy + content removed; audit retained + `delete` entry appended; the relevant counter (رقم النسخة for عادي, رقم المتفرق for متفرق) is rolled back — no gap. |

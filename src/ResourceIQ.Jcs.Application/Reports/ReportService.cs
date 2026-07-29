@@ -68,11 +68,14 @@ public sealed class ReportService(ICurrentUser currentUser, IReportQueries queri
     {
         Guard.RequireAuthenticated(currentUser);
         var courts = currentUser.CourtIds; // empty => matches nothing (safe)
+        var rooms = currentUser.RoomIds;   // Copyist/Reviewer room scope (BR-06)
         return currentUser.Role switch
         {
             Role.Administrator => new ReportScope(null, null, null, null),
-            Role.Reviewer => new ReportScope(null, null, currentUser.Id, courts),
-            Role.Copyist => new ReportScope(null, currentUser.Id, null, courts),
+            // Copyist/Reviewer are ROOM-scoped: RoomIds tightens to their rooms where the row has one;
+            // the derived CourtIds is kept as a safe fallback for reports without a RoomId column.
+            Role.Reviewer => new ReportScope(null, null, currentUser.Id, courts, rooms),
+            Role.Copyist => new ReportScope(null, currentUser.Id, null, courts, rooms),
             Role.RegistryHead => new ReportScope(currentUser.Id, null, null, courts),
             _ => throw new ForbiddenException("Not permitted to view reports."),
         };

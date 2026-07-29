@@ -13,8 +13,14 @@ public interface ICurrentUser
     Role Role { get; }
     bool IsAuthenticated { get; }
 
-    /// <summary>Courts assigned to this user — the basis for BR-06 scoping.</summary>
+    /// <summary>Courts assigned to this user — the basis for court-level BR-06 scoping (Registry Head).
+    /// For Copyists/Reviewers these are DERIVED from their assigned rooms' courts.</summary>
     IReadOnlyCollection<Guid> CourtIds { get; }
 
+    /// <summary>Rooms assigned to this user — the basis for ROOM-level BR-06 scoping (Copyist/Reviewer).
+    /// Empty for Registry Heads/Administrators.</summary>
+    IReadOnlyCollection<Guid> RoomIds { get; }
+
     bool IsAssignedToCourt(Guid courtId);
+    bool IsAssignedToRoom(Guid roomId);
 }

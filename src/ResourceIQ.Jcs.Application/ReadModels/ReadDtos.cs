@@ -130,7 +130,11 @@ public sealed record JudgeDto(Guid Id, string Name, bool IsActive, IReadOnlyList
 public sealed record PanelMemberTitleDto(Guid Id, string Name, bool IsActive, int DisplayOrder);
 
 public sealed record UserDto(
-    Guid Id, string Username, string DisplayName, Role Role, bool IsActive, IReadOnlyList<Guid> CourtIds);
+    Guid Id, string Username, string DisplayName, Role Role, bool IsActive,
+    IReadOnlyList<Guid> CourtIds, IReadOnlyList<Guid> RoomIds);
+
+/// <summary>A user assigned to a court/room, for the admin's per-court/per-room assignee panels.</summary>
+public sealed record AssignedUserDto(Guid Id, string Username, string DisplayName, Role Role);
 
 public sealed record ParagraphTemplateDto(Guid Id, string Title, string Body, bool IsArchived, Guid? FormTemplateId);
 
@@ -150,7 +154,10 @@ public sealed record CopyRequestFilter(
     string? CaseBaseNumber = null,
     DateOnly? FromReservation = null,
     DateOnly? ToReservation = null,
-    Guid? RoomId = null);
+    Guid? RoomId = null,
+    // Room-level BR-06 scope for Copyists/Reviewers. null => no room restriction; a non-null
+    // (possibly empty) set restricts to those rooms — an empty set matches nothing.
+    IReadOnlyCollection<Guid>? RoomIds = null);
 
 /// <summary>Court + room display names for a copy (pre-fill of الهيئة الحاكمة at acceptance).</summary>
 public sealed record CourtRoomNames(string CourtName, string RoomName);

@@ -83,9 +83,10 @@ export function CreateRequestPage() {
   // onChange handlers (pickCourt/pickRoom) — NOT here — so a draft-restore that sets state directly
   // is never wiped by a cascade effect (JC-32).
   useEffect(() => {
-    if (!courtId) { setCopyists([]); return; }
-    api.lookupCopyists(courtId).then(setCopyists).catch((e) => setErr(e.message));
-  }, [courtId]);
+    // Copyists are ROOM-scoped (BR-06): the assignee list depends on the selected room, not the court.
+    if (!roomId) { setCopyists([]); return; }
+    api.lookupCopyists(roomId).then(setCopyists).catch((e) => setErr(e.message));
+  }, [roomId]);
   useEffect(() => {
     if (!courtId) { setRooms([]); return; }
     api.lookupRooms(courtId).then(setRooms).catch((e) => setErr(e.message));
@@ -93,7 +94,7 @@ export function CreateRequestPage() {
 
   // User-driven selection changes reset dependent fields (a restore bypasses these by setting state directly).
   function pickCourt(v: string) { setCourtId(v); setRoomId(""); setCopyistId(""); setOriginalId(""); setOriginalSearch(""); }
-  function pickRoom(v: string) { setRoomId(v); setOriginalId(""); setOriginalSearch(""); }
+  function pickRoom(v: string) { setRoomId(v); setCopyistId(""); setOriginalId(""); setOriginalSearch(""); }
 
   // JC-32: auto-save/restore the whole create form (Registry Head only). Restore sets state directly;
   // because the reset logic lives in pickCourt/pickRoom (not effects), restored fields are never wiped.
@@ -231,7 +232,7 @@ export function CreateRequestPage() {
         <div className="row">
           <label className="field">
             <span>{L("الناسخ المكلَّف", "Assigned copyist")}</span>
-            <select value={copyistId} onChange={(e) => setCopyistId(e.target.value)} required disabled={!courtId}>
+            <select value={copyistId} onChange={(e) => setCopyistId(e.target.value)} required disabled={!roomId}>
               <option value="" disabled>{L("اختر الناسخ", "Select copyist")}</option>
               {copyists.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

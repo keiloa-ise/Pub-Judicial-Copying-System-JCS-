@@ -20,6 +20,17 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         b.Property(x => x.PasswordHash).IsRequired();
         b.Property(x => x.DisplayName).HasMaxLength(200);
         b.HasMany(x => x.Courts).WithOne(uc => uc.User!).HasForeignKey(uc => uc.UserId);
+        b.HasMany(x => x.Rooms).WithOne(ur => ur.User!).HasForeignKey(ur => ur.UserId);
+    }
+}
+
+public sealed class UserRoomConfiguration : IEntityTypeConfiguration<UserRoom>
+{
+    public void Configure(EntityTypeBuilder<UserRoom> b)
+    {
+        b.HasKey(x => new { x.UserId, x.RoomId });
+        b.HasOne(x => x.Room).WithMany().HasForeignKey(x => x.RoomId);
+        b.HasIndex(x => x.RoomId); // room-scoped user lookups (assign-copyist picker)
     }
 }
 

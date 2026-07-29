@@ -33,7 +33,7 @@ public sealed class DeleteCopyService(
         var request = await repository.GetAsync(cmd.CopyRequestId, ct)
                       ?? throw new NotFoundException("Copy request not found.");
 
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06 — within the head's courts
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06 — within the head's courts
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {

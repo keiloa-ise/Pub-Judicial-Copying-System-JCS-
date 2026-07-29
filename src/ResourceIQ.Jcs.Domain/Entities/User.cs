@@ -18,6 +18,10 @@ public class User
     public Role Role { get; set; }
     public bool IsActive { get; set; } = true;
 
-    /// <summary>Courts this user is assigned to — drives BR-06 scoping.</summary>
+    /// <summary>Courts this user is assigned to — drives BR-06 scoping for Registry Heads.</summary>
     public ICollection<UserCourt> Courts { get; set; } = new List<UserCourt>();
+
+    /// <summary>Rooms this user is assigned to — the ROOM-level BR-06 scope for Copyists and
+    /// Reviewers (may span rooms across several courts). Empty for Heads/Administrators.</summary>
+    public ICollection<UserRoom> Rooms { get; set; } = new List<UserRoom>();
 }

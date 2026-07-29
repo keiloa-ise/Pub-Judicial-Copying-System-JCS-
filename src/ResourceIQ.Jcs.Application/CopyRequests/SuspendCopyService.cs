@@ -24,7 +24,7 @@ public sealed class SuspendCopyService(
 
         var request = await repository.GetAsync(cmd.CopyRequestId, ct)
                       ?? throw new NotFoundException("Copy request not found.");
-        Guard.RequireAssignedCourt(currentUser, request.CourtId);
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId);
 
         var note = string.IsNullOrWhiteSpace(cmd.Note) ? null : cmd.Note.Trim();
         await unitOfWork.ExecuteInTransactionAsync(async token =>

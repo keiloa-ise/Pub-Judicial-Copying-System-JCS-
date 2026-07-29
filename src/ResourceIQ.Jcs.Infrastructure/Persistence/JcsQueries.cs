@@ -14,6 +14,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
     {
         var states = filter.States?.ToArray();
         var courts = filter.CourtIds?.ToArray();
+        var rooms = filter.RoomIds?.ToArray();
 
         // Filter on the base set first (kept over CopyRequest so the priority index can serve the sort +
         // page); the court/room/copyist name joins are applied only to the page's rows below.
@@ -24,6 +25,8 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         // null courts => no restriction (admin); a non-null list restricts (empty => no rows).
         if (courts is not null) baseQ = baseQ.Where(cr => courts.Contains(cr.CourtId));
         if (filter.RoomId is { } room) baseQ = baseQ.Where(cr => cr.RoomId == room);
+        // Room-level scope (Copyist/Reviewer BR-06): null => no restriction; empty => no rows.
+        if (rooms is not null) baseQ = baseQ.Where(cr => rooms.Contains(cr.RoomId));
 
         // Advanced-search narrowing
         if (!string.IsNullOrWhiteSpace(filter.CopyNumber))
@@ -169,11 +172,11 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         return new DeletionTargetsDto(normals, miscs);
     }
 
-    public Task<IReadOnlyList<CopyRequestListItem>> ListReviewerPrintQueueAsync(IReadOnlyCollection<Guid> courtIds, CancellationToken ct)
+    public Task<IReadOnlyList<CopyRequestListItem>> ListReviewerPrintQueueAsync(IReadOnlyCollection<Guid> roomIds, CancellationToken ct)
     {
-        var ids = courtIds.ToArray();
+        var ids = roomIds.ToArray();
         var q = db.CopyRequests.AsNoTracking()
-            .Where(cr => ids.Contains(cr.CourtId) && cr.State == CopyState.Approved && cr.PrintedUtc == null);
+            .Where(cr => ids.Contains(cr.RoomId) && cr.State == CopyState.Approved && cr.PrintedUtc == null);
         return PrintQueueProjectionAsync(q, ct);
     }
 
@@ -303,10 +306,10 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         await db.Rooms.AsNoTracking().Where(r => r.Id == roomId)
             .Select(r => new RoomDto(r.Id, r.CourtId, r.Code, r.Name, r.IsActive, r.NumberingPolicy, r.NumberingLevel, r.CopyNumberingPolicy)).FirstOrDefaultAsync(ct);
 
-    public async Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndCourtAsync(Role role, Guid courtId, CancellationToken ct) =>
+    public async Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndRoomAsync(Role role, Guid roomId, CancellationToken ct) =>
         await db.Users.AsNoTracking()
             .Where(u => u.Role == role && u.IsActive
-                        && db.Set<UserCourt>().Any(uc => uc.UserId == u.Id && uc.CourtId == courtId))
+                        && db.Set<UserRoom>().Any(ur => ur.UserId == u.Id && ur.RoomId == roomId))
             .OrderBy(u => u.DisplayName)
             .Select(u => new LookupItem(u.Id, u.DisplayName)).ToListAsync(ct);
 

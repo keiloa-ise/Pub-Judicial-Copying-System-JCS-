@@ -26,7 +26,9 @@ public sealed record ReportScope(
     Guid? CreatedById,
     Guid? AssignedCopyistId,
     Guid? ApprovedById,
-    IReadOnlyCollection<Guid>? CourtIds);
+    IReadOnlyCollection<Guid>? CourtIds,
+    // Room-level scope for Copyists/Reviewers (BR-06): non-null => the row's RoomId must be in the set.
+    IReadOnlyCollection<Guid>? RoomIds = null);
 
 /// <summary>Count of copies for one dimension value (court/room/copyist/reviewer), with a per-state
 /// breakdown. <paramref name="Id"/> is null for the "unassigned" bucket (e.g. no reviewer yet).</summary>

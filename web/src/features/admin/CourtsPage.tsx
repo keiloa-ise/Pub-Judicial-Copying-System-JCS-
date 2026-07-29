@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Court, type Room, type NumberingPolicy, type CopyNumberingPolicy } from "../../api/client";
-import { useL, ErrorBox, Spinner, Modal, useSort, SortTh, numberingPolicyLabels } from "../../app/ui";
+import { api, type Court, type Room, type AssignedUser, type NumberingPolicy, type CopyNumberingPolicy } from "../../api/client";
+import { useL, ErrorBox, Spinner, Modal, useSort, SortTh, numberingPolicyLabels, roleLabels } from "../../app/ui";
 import { useI18n } from "../../i18n";
 
 const LEVELS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)); // A..Z
@@ -23,6 +23,8 @@ export function CourtsPage() {
   const [editing, setEditing] = useState<Court | null>(null);
   const [edName, setEdName] = useState("");
   const [edActive, setEdActive] = useState(true);
+  const [courtUsers, setCourtUsers] = useState<AssignedUser[] | null>(null); // heads assigned to the edited court
+  const [roomUsers, setRoomUsers] = useState<AssignedUser[] | null>(null);   // copyists/reviewers of the edited room
 
   // ── Rooms management ──
   const [roomCourtId, setRoomCourtId] = useState("");
@@ -63,7 +65,47 @@ export function CourtsPage() {
     run(async () => { await api.admin.createCourt(code, name); setCode(""); setName(""); });
   }
 
-  function startEdit(c: Court) { setErr(null); setEditing(c); setEdName(c.name); setEdActive(c.isActive); }
+  const loadCourtUsers = (courtId: string) => api.admin.courtUsers(courtId).then(setCourtUsers).catch((e) => setErr(e.message));
+  const loadRoomUsers = (roomId: string) => api.admin.roomUsers(roomId).then(setRoomUsers).catch((e) => setErr(e.message));
+
+  function startEdit(c: Court) {
+    setErr(null); setEditing(c); setEdName(c.name); setEdActive(c.isActive);
+    setCourtUsers(null); loadCourtUsers(c.id);
+  }
+
+  function unassignFromCourt(userId: string) {
+    if (!editing) return;
+    const id = editing.id;
+    run(() => api.admin.unassignCourtUser(id, userId), () => loadCourtUsers(id));
+  }
+  function unassignFromRoom(userId: string) {
+    if (!edRoom) return;
+    const id = edRoom.id;
+    run(() => api.admin.unassignRoomUser(id, userId), () => loadRoomUsers(id));
+  }
+
+  /** Assignee panel: shows the users assigned to the edited court/room with an unassign (✕) each. */
+  const AssigneePanel = ({ title, users, onUnassign }: {
+    title: string; users: AssignedUser[] | null; onUnassign: (userId: string) => void;
+  }) => (
+    <label className="field">
+      <span>{title}</span>
+      {users === null ? <span className="muted">{L("جارٍ التحميل…", "Loading…")}</span>
+        : users.length === 0 ? <span className="muted">{L("لا يوجد مُسنَدون.", "No one assigned.")}</span>
+        : (
+          <div className="chips">
+            {users.map((u) => (
+              <span key={u.id} className="chip">
+                {u.displayName} <span className="muted">({roleLabels[u.role][ak]})</span>
+                <button type="button" className="btn btn--ghost" disabled={busy}
+                  style={{ padding: "0 6px", marginInlineStart: 6 }}
+                  title={L("إلغاء الإسناد", "Unassign")} onClick={() => onUnassign(u.id)}>✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+    </label>
+  );
 
   function saveEdit(e: FormEvent) {
     e.preventDefault();
@@ -85,6 +127,7 @@ export function CourtsPage() {
     setErr(null); setEdRoom(r); setEdRoomName(r.name); setEdRoomActive(r.isActive);
     setEdRoomPolicy(r.numberingPolicy); setEdRoomLevel(r.numberingLevel ?? "A");
     setEdRoomCopyPolicy(r.copyNumberingPolicy);
+    setRoomUsers(null); loadRoomUsers(r.id);
   }
 
   function saveRoomEdit(e: FormEvent) {
@@ -120,6 +163,8 @@ export function CourtsPage() {
               </select>
             </label>
           </div>
+          <AssigneePanel title={L("رؤساء الديوان المُسنَدون لهذه المحكمة", "Registry heads assigned to this court")}
+            users={courtUsers} onUnassign={unassignFromCourt} />
           <div className="btn-row">
             <button className="btn" disabled={busy}>{L("حفظ", "Save")}</button>
             <button className="btn btn--ghost" type="button" onClick={() => setEditing(null)}>{L("إلغاء", "Cancel")}</button>
@@ -227,6 +272,8 @@ export function CourtsPage() {
                     </label>
                   )}
                 </div>
+                <AssigneePanel title={L("المحرِّرون والمدقِّقون المُسنَدون لهذه الغرفة", "Copyists & reviewers assigned to this room")}
+                  users={roomUsers} onUnassign={unassignFromRoom} />
                 <div className="btn-row">
                   <button className="btn" disabled={busy}>{L("حفظ", "Save")}</button>
                   <button className="btn btn--ghost" type="button" onClick={() => setEdRoom(null)}>{L("إلغاء", "Cancel")}</button>

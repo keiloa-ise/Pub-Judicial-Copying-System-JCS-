@@ -33,7 +33,7 @@ public sealed class PrintCopyService(
 
         // Same court-scoped visibility as viewing (BR-06); Administrators are unrestricted.
         if (currentUser.Role != Role.Administrator)
-            Guard.RequireAssignedCourt(currentUser, request.CourtId);
+            Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId);
 
         // FR-15 item 3: the individual (re)print option for a Copyist is gated by ALLOW_COPYIST_REPRINT
         // (default true). When false, individual print is limited to the Registry Head. Other roles

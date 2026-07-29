@@ -72,6 +72,7 @@ public class WorkflowServiceTests
         var req = SeedUnderReview(court);
         var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
         reviewer.Courts.Add(court);
+        reviewer.Rooms.Add(req.RoomId); // BR-06: reviewer is room-scoped
         var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
 
         await svc.ApproveAsync(new ApproveCommand(req.Id), CancellationToken.None);
@@ -89,6 +90,8 @@ public class WorkflowServiceTests
         var normal = SeedUnderReviewWith(court, CaseUrgency.Normal, "case-B", "00000002");
         var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
         reviewer.Courts.Add(court);
+        reviewer.Rooms.Add(suspended.RoomId); // BR-06: reviewer is room-scoped
+        reviewer.Rooms.Add(normal.RoomId);
         var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
 
         // Approving the lower-priority عادي while a موقوف is still under review is rejected.

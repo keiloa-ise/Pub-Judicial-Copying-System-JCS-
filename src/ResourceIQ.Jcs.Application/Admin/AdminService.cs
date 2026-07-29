@@ -189,6 +189,39 @@ public sealed class AdminService(
         return store.SetUserCourtsAsync(id, courtIds, ct);
     }
 
+    /// <summary>Assigns a Copyist/Reviewer to a set of rooms (BR-06, room-level scope).</summary>
+    public Task SetUserRoomsAsync(Guid id, IReadOnlyCollection<Guid> roomIds, CancellationToken ct)
+    {
+        RequireAdmin();
+        return store.SetUserRoomsAsync(id, roomIds, ct);
+    }
+
+    /// <summary>Copyists/Reviewers assigned to a room (for the room's assignee panel).</summary>
+    public Task<IReadOnlyList<AssignedUserDto>> ListRoomUsersAsync(Guid roomId, CancellationToken ct)
+    {
+        RequireAdmin();
+        return store.ListRoomUsersAsync(roomId, ct);
+    }
+
+    /// <summary>Registry Heads assigned to a court (for the court's assignee panel).</summary>
+    public Task<IReadOnlyList<AssignedUserDto>> ListCourtUsersAsync(Guid courtId, CancellationToken ct)
+    {
+        RequireAdmin();
+        return store.ListCourtUsersAsync(courtId, ct);
+    }
+
+    public Task UnassignUserFromRoomAsync(Guid roomId, Guid userId, CancellationToken ct)
+    {
+        RequireAdmin();
+        return store.RemoveUserRoomAsync(userId, roomId, ct);
+    }
+
+    public Task UnassignUserFromCourtAsync(Guid courtId, Guid userId, CancellationToken ct)
+    {
+        RequireAdmin();
+        return store.RemoveUserCourtAsync(userId, courtId, ct);
+    }
+
     // ── Judges ──
     public Task<IReadOnlyList<JudgeDto>> ListJudgesAsync(CancellationToken ct)
     {

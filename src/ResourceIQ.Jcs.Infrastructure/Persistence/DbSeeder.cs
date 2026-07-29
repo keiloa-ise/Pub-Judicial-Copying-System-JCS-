@@ -194,9 +194,11 @@ public static class DbSeeder
     {
         if (await db.Users.AnyAsync(ct)) return;
 
-        // Scope the demo workflow users to every seeded official court (BR-06) so the end-to-end
-        // demo can act on the real courts/rooms/judges. Reference data is seeded before this runs.
+        // Scope the demo workflow users (BR-06) so the end-to-end demo can act on the real
+        // courts/rooms/judges. Registry Head is COURT-scoped; Copyist/Reviewer are ROOM-scoped.
+        // Reference data is seeded before this runs.
         var courtIds = await db.Courts.Select(c => c.Id).ToListAsync(ct);
+        var roomIds = await db.Rooms.Select(r => r.Id).ToListAsync(ct);
 
         User Make(string username, string display, Role role) => new()
         {
@@ -213,10 +215,12 @@ public static class DbSeeder
         var reviewer = Make("reviewer", "المدقق", Role.Reviewer);
         db.Users.AddRange(admin, head, copyist, reviewer);
 
-        // Admin is not court-scoped (manages everything); the workflow roles see all seeded courts.
-        foreach (var u in new[] { head, copyist, reviewer })
-            foreach (var cid in courtIds)
-                u.Courts.Add(new UserCourt { UserId = u.Id, CourtId = cid });
+        // Admin is unrestricted. Registry Head is court-scoped; Copyist/Reviewer are room-scoped.
+        foreach (var cid in courtIds)
+            head.Courts.Add(new UserCourt { UserId = head.Id, CourtId = cid });
+        foreach (var u in new[] { copyist, reviewer })
+            foreach (var rid in roomIds)
+                u.Rooms.Add(new UserRoom { UserId = u.Id, RoomId = rid });
 
         await db.SaveChangesAsync(ct);
     }

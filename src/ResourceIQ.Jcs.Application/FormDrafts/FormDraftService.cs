@@ -72,7 +72,7 @@ public sealed class FormDraftService(
         var request = await copyRequests.GetAsync(copyRequestId.Value, ct)
                       ?? throw new NotFoundException("Copy request not found.");
         if (currentUser.Role != Role.Administrator)
-            Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+            Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
 
         switch (currentUser.Role)
         {

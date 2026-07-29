@@ -23,8 +23,8 @@ public sealed class AuthService(
         if (user is null || !user.IsActive || !passwordHasher.Verify(user.PasswordHash, cmd.Password))
             throw new ForbiddenException("Invalid credentials.");
 
-        var courtIds = await users.GetAssignedCourtIdsAsync(user.Id, ct);
-        var token = tokenService.CreateToken(user, courtIds);
+        var scope = await users.GetAssignedScopeAsync(user.Id, user.Role, ct);
+        var token = tokenService.CreateToken(user, scope.CourtIds, scope.RoomIds);
         return new LoginResult(token, user.Id, user.DisplayName, user.Role);
     }
 }

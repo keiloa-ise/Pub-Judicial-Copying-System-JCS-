@@ -23,7 +23,7 @@ public sealed class SubmitForReviewService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireRole(currentUser, Role.Copyist);
-        Guard.RequireAssignedCourt(currentUser, request.CourtId);
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId);
         if (request.AssignedCopyistId != currentUser.Id)
             throw new ForbiddenException("Only the assigned copyist may submit this copy (BR-02).");
 

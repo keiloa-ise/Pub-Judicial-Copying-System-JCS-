@@ -14,9 +14,9 @@ public sealed class LookupsController(LookupService lookups) : ControllerBase
     public async Task<IActionResult> Courts(CancellationToken ct) =>
         Ok(await lookups.CourtsForCurrentUserAsync(ct));
 
-    [HttpGet("courts/{courtId:guid}/copyists")]
-    public async Task<IActionResult> Copyists(Guid courtId, CancellationToken ct) =>
-        Ok(await lookups.CopyistsInCourtAsync(courtId, ct));
+    [HttpGet("rooms/{roomId:guid}/copyists")]
+    public async Task<IActionResult> Copyists(Guid roomId, CancellationToken ct) =>
+        Ok(await lookups.CopyistsInRoomAsync(roomId, ct));
 
     [HttpGet("courts/{courtId:guid}/rooms")]
     public async Task<IActionResult> Rooms(Guid courtId, CancellationToken ct) =>

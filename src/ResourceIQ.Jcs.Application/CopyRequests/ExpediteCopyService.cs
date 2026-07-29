@@ -24,7 +24,7 @@ public sealed class ExpediteCopyService(
 
         var request = await repository.GetAsync(cmd.CopyRequestId, ct)
                       ?? throw new NotFoundException("Copy request not found.");
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {

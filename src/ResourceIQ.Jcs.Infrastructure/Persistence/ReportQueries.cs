@@ -32,6 +32,11 @@ public sealed class ReportQueries(JcsDbContext db) : IReportQueries
             var ids = scope.CourtIds.ToArray();
             q = q.Where(x => ids.Contains(x.CourtId));
         }
+        if (scope.RoomIds is not null)
+        {
+            var rids = scope.RoomIds.ToArray();
+            q = q.Where(x => rids.Contains(x.RoomId));
+        }
 
         if (f.FromDate is { } fd)
         {

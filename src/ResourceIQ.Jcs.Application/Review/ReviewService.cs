@@ -30,7 +30,7 @@ public sealed class ReviewService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireRole(currentUser, Role.Reviewer);            // BR-03
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
 
         // FR-10/BR-10: the Reviewer approves in the SAME priority order the Copyist accepts — highest
         // tier (موقوف > مستعجل > عادي) then oldest-first. Cannot approve this copy while a higher-ranked
@@ -55,7 +55,7 @@ public sealed class ReviewService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireRole(currentUser, Role.Reviewer);            // BR-03
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
 
         var before = request.Content?.SectionsJson;
         var sectionsJson = RichText.SanitizeSectionsJson(cmd.SectionsJson);
@@ -73,7 +73,7 @@ public sealed class ReviewService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireRole(currentUser, Role.Reviewer);            // BR-03
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
 
         if (string.IsNullOrWhiteSpace(cmd.Corrections))
             throw new DomainException("A reason / corrections note is required when returning a copy.");

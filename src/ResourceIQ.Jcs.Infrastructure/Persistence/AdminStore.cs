@@ -122,7 +122,8 @@ public sealed class AdminStore(JcsDbContext db) : IAdminStore
     public async Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken ct) =>
         await db.Users.AsNoTracking().OrderBy(u => u.Username)
             .Select(u => new UserDto(u.Id, u.Username, u.DisplayName, u.Role, u.IsActive,
-                u.Courts.Select(c => c.CourtId).ToList()))
+                u.Courts.Select(c => c.CourtId).ToList(),
+                u.Rooms.Select(r => r.RoomId).ToList()))
             .ToListAsync(ct);
 
     public Task<bool> UsernameExistsAsync(string username, CancellationToken ct) =>
@@ -175,6 +176,38 @@ public sealed class AdminStore(JcsDbContext db) : IAdminStore
             user.Courts.Add(new UserCourt { UserId = user.Id, CourtId = cid });
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task SetUserRoomsAsync(Guid id, IReadOnlyCollection<Guid> roomIds, CancellationToken ct)
+    {
+        var user = await db.Users.Include(u => u.Rooms).FirstOrDefaultAsync(u => u.Id == id, ct)
+                   ?? throw new NotFoundException("User not found.");
+        user.Rooms.Clear();
+        foreach (var rid in roomIds.Distinct())
+            user.Rooms.Add(new UserRoom { UserId = user.Id, RoomId = rid });
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<AssignedUserDto>> ListRoomUsersAsync(Guid roomId, CancellationToken ct) =>
+        await db.Users.AsNoTracking()
+            .Where(u => (u.Role == Role.Copyist || u.Role == Role.Reviewer)
+                        && db.Set<UserRoom>().Any(ur => ur.UserId == u.Id && ur.RoomId == roomId))
+            .OrderBy(u => u.Role).ThenBy(u => u.DisplayName)
+            .Select(u => new AssignedUserDto(u.Id, u.Username, u.DisplayName, u.Role))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<AssignedUserDto>> ListCourtUsersAsync(Guid courtId, CancellationToken ct) =>
+        await db.Users.AsNoTracking()
+            .Where(u => u.Role == Role.RegistryHead
+                        && db.Set<UserCourt>().Any(uc => uc.UserId == u.Id && uc.CourtId == courtId))
+            .OrderBy(u => u.DisplayName)
+            .Select(u => new AssignedUserDto(u.Id, u.Username, u.DisplayName, u.Role))
+            .ToListAsync(ct);
+
+    public Task RemoveUserRoomAsync(Guid userId, Guid roomId, CancellationToken ct) =>
+        db.Set<UserRoom>().Where(ur => ur.UserId == userId && ur.RoomId == roomId).ExecuteDeleteAsync(ct);
+
+    public Task RemoveUserCourtAsync(Guid userId, Guid courtId, CancellationToken ct) =>
+        db.Set<UserCourt>().Where(uc => uc.UserId == userId && uc.CourtId == courtId).ExecuteDeleteAsync(ct);
 
     // ── Judges ──
     public async Task<IReadOnlyList<JudgeDto>> ListJudgesAsync(CancellationToken ct) =>

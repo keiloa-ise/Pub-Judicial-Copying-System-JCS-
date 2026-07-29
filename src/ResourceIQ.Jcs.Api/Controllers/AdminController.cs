@@ -97,6 +97,41 @@ public sealed class AdminController(AdminService admin) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Assigns a Copyist/Reviewer to rooms (room-level BR-06 scope).</summary>
+    [HttpPut("users/{id:guid}/rooms")]
+    public async Task<IActionResult> SetUserRooms(Guid id, SetRoomsRequest b, CancellationToken ct)
+    {
+        await admin.SetUserRoomsAsync(id, b.RoomIds, ct);
+        return NoContent();
+    }
+
+    // ── Per-room / per-court assignee panels (view + unassign) ──
+    /// <summary>Copyists/Reviewers assigned to a room.</summary>
+    [HttpGet("rooms/{roomId:guid}/users")]
+    public async Task<IActionResult> RoomUsers(Guid roomId, CancellationToken ct) =>
+        Ok(await admin.ListRoomUsersAsync(roomId, ct));
+
+    /// <summary>Unassign a Copyist/Reviewer from a room.</summary>
+    [HttpDelete("rooms/{roomId:guid}/users/{userId:guid}")]
+    public async Task<IActionResult> UnassignRoomUser(Guid roomId, Guid userId, CancellationToken ct)
+    {
+        await admin.UnassignUserFromRoomAsync(roomId, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>Registry Heads assigned to a court.</summary>
+    [HttpGet("courts/{courtId:guid}/users")]
+    public async Task<IActionResult> CourtUsers(Guid courtId, CancellationToken ct) =>
+        Ok(await admin.ListCourtUsersAsync(courtId, ct));
+
+    /// <summary>Unassign a Registry Head from a court.</summary>
+    [HttpDelete("courts/{courtId:guid}/users/{userId:guid}")]
+    public async Task<IActionResult> UnassignCourtUser(Guid courtId, Guid userId, CancellationToken ct)
+    {
+        await admin.UnassignUserFromCourtAsync(courtId, userId, ct);
+        return NoContent();
+    }
+
     // ── Judges ──
     [HttpGet("judges")]
     public async Task<IActionResult> ListJudges(CancellationToken ct) => Ok(await admin.ListJudgesAsync(ct));

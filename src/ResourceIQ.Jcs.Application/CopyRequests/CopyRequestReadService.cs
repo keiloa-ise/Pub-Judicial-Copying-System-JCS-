@@ -42,9 +42,9 @@ public sealed class CopyRequestReadService(
             states = [CopyState.Created, CopyState.InPreparation, CopyState.UnderReview, CopyState.Unlocked];
         else states = null;
 
-        // Court scope (BR-06). null => no court restriction (Administrator only). A non-null
-        // (possibly empty) list restricts to those courts — an empty list matches nothing.
-        var courtScope = ResolveCourtScope(search.CourtId);
+        // BR-06 scope. Copyists/Reviewers are room-scoped; Registry Heads court-scoped; Administrators
+        // unrestricted. A null set => no restriction on that axis; a non-null (possibly empty) set restricts.
+        var (courtScope, roomScope) = ResolveScope(search.CourtId);
 
         var filter = new CopyRequestFilter(
             States: states,
@@ -54,35 +54,50 @@ public sealed class CopyRequestReadService(
             CopyNumber: search.CopyNumber,
             CaseBaseNumber: search.CaseBaseNumber,
             FromReservation: search.FromReservation,
-            ToReservation: search.ToReservation);
+            ToReservation: search.ToReservation,
+            RoomIds: roomScope);
 
         return queries.ListCopyRequestsAsync(filter, page, pageSize, ct);
     }
 
     /// <summary>
-    /// Resolves the set of courts the listing may include. Administrators are unrestricted
-    /// (null) unless they pick a specific court; everyone else is confined to their assigned
-    /// courts, and an explicit court outside that set is rejected (BR-06).
+    /// Resolves the (court, room) scope the listing may include, by role:
+    ///   • Administrator — unrestricted (null/null), or a single requested court.
+    ///   • Copyist/Reviewer — ROOM-scoped to their assigned rooms; an optional court just narrows within them.
+    ///   • Registry Head — COURT-scoped to their assigned courts.
+    /// An explicit court outside the caller's derived courts is rejected (BR-06). Empty scope matches nothing.
     /// </summary>
-    private IReadOnlyCollection<Guid>? ResolveCourtScope(Guid? requestedCourt)
+    private (IReadOnlyCollection<Guid>? Courts, IReadOnlyCollection<Guid>? Rooms) ResolveScope(Guid? requestedCourt)
     {
         if (currentUser.Role == Role.Administrator)
-            return requestedCourt is { } ac ? [ac] : null;
+            return (requestedCourt is { } ac ? [ac] : null, null);
 
-        if (requestedCourt is { } cid)
+        if (currentUser.Role is Role.Copyist or Role.Reviewer)
         {
-            if (!currentUser.IsAssignedToCourt(cid))
-                throw new ForbiddenException("Not assigned to this court (BR-06).");
-            return [cid];
+            if (requestedCourt is { } cid)
+            {
+                if (!currentUser.IsAssignedToCourt(cid)) // derived from their rooms' courts
+                    throw new ForbiddenException("Not assigned to this court (BR-06).");
+                return ([cid], currentUser.RoomIds);
+            }
+            return (null, currentUser.RoomIds); // may be empty → matches nothing (safe)
         }
-        return currentUser.CourtIds; // may be empty → matches nothing (safe)
+
+        // Registry Head: court-scoped.
+        if (requestedCourt is { } c)
+        {
+            if (!currentUser.IsAssignedToCourt(c))
+                throw new ForbiddenException("Not assigned to this court (BR-06).");
+            return ([c], null);
+        }
+        return (currentUser.CourtIds, null);
     }
 
     public async Task<CopyRequestDetail> GetDetailAsync(Guid id, CancellationToken ct)
     {
         var detail = await queries.GetCopyRequestAsync(id, ct)
                      ?? throw new NotFoundException("Copy request not found.");
-        EnsureCanView(detail.CourtId);
+        EnsureCanView(detail.CourtId, detail.RoomId);
         return detail;
     }
 
@@ -149,7 +164,7 @@ public sealed class CopyRequestReadService(
         Guid courtId, Guid roomId, CaseCategory category, CancellationToken ct)
     {
         Guard.RequireRole(currentUser, Role.RegistryHead);
-        EnsureCanView(courtId); // BR-06: only within the head's assigned courts
+        EnsureCanView(courtId, roomId); // BR-06: only within the head's assigned courts
         var year = clock.UtcNow.Year; // تاريخ الحجز is server-assigned = today, so numbering is the current year
         var last = category == CaseCategory.Miscellaneous
             ? await miscAllocator.PeekLastAsync(courtId, roomId, year, ct)
@@ -161,15 +176,12 @@ public sealed class CopyRequestReadService(
     {
         var detail = await queries.GetCopyRequestAsync(id, ct)
                      ?? throw new NotFoundException("Copy request not found.");
-        EnsureCanView(detail.CourtId);
+        EnsureCanView(detail.CourtId, detail.RoomId);
         return await queries.GetAuditAsync(id, ct);
     }
 
-    private void EnsureCanView(Guid courtId)
-    {
-        Guard.RequireAuthenticated(currentUser);
-        // Administrators see everything; everyone else only within their assigned courts (BR-06).
-        if (currentUser.Role != Role.Administrator && !currentUser.IsAssignedToCourt(courtId))
-            throw new ForbiddenException("Not permitted to view this copy request (BR-06).");
-    }
+    /// <summary>BR-06 view check by role: Copyist/Reviewer must be assigned the copy's ROOM, Registry Head
+    /// its COURT, Administrator anything.</summary>
+    private void EnsureCanView(Guid courtId, Guid roomId) =>
+        Guard.RequireCopyScope(currentUser, courtId, roomId);
 }

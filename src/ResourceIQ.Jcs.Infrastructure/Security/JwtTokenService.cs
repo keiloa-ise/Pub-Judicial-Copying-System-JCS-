@@ -15,10 +15,11 @@ namespace ResourceIQ.Jcs.Infrastructure.Security;
 public sealed class JwtTokenService(IOptions<JwtOptions> options) : ITokenService
 {
     public const string CourtClaim = "court";
+    public const string RoomClaim = "room";
 
     private readonly JwtOptions _o = options.Value;
 
-    public string CreateToken(User user, IReadOnlyCollection<Guid> courtIds)
+    public string CreateToken(User user, IReadOnlyCollection<Guid> courtIds, IReadOnlyCollection<Guid> roomIds)
     {
         var claims = new List<Claim>
         {
@@ -28,6 +29,7 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options) : ITokenServic
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
         claims.AddRange(courtIds.Select(id => new Claim(CourtClaim, id.ToString())));
+        claims.AddRange(roomIds.Select(id => new Claim(RoomClaim, id.ToString())));
 
         var creds = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_o.SigningKey)),

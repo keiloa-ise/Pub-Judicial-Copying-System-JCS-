@@ -29,6 +29,7 @@ public class CopyistCorrectionStatTests
         _repo.Seed(r);
         var user = new FakeCurrentUser { Role = Role.Copyist, Id = copyistId };
         user.Courts.Add(court);
+        user.Rooms.Add(r.RoomId); // BR-06: copyist is room-scoped
         return (r, user);
     }
 

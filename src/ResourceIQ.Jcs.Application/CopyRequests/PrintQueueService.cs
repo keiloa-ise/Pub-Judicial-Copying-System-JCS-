@@ -28,7 +28,7 @@ public sealed class PrintQueueService(
     public Task<IReadOnlyList<CopyRequestListItem>> GetReviewerQueueAsync(CancellationToken ct)
     {
         Guard.RequireRole(currentUser, Role.Reviewer);
-        return queries.ListReviewerPrintQueueAsync(currentUser.CourtIds, ct);
+        return queries.ListReviewerPrintQueueAsync(currentUser.RoomIds, ct);
     }
 
     public Task<IReadOnlyList<CopyRequestListItem>> GetCopyistQueueAsync(CancellationToken ct)
@@ -68,7 +68,7 @@ public sealed class PrintQueueService(
     /// <summary>Ensures the caller may print this copy from THEIR queue (role + court + queue membership).</summary>
     private void AuthorizeQueueItem(Domain.Entities.CopyRequest request)
     {
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
         switch (currentUser.Role)
         {
             case Role.Reviewer:

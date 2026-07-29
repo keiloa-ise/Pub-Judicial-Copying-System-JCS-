@@ -34,4 +34,28 @@ public static class Guard
         if (!user.IsAssignedToCourt(courtId))
             throw new ForbiddenException("User is not assigned to this court (BR-06).");
     }
+
+    /// <summary>
+    /// BR-06 for a specific copy, resolved by the caller's role: Copyists and Reviewers are scoped to
+    /// the copy's ROOM; Registry Heads to its COURT; Administrators are unrestricted. Callers still
+    /// role-gate first (RequireRole) — this only checks assignment.
+    /// </summary>
+    public static void RequireCopyScope(ICurrentUser user, Guid courtId, Guid roomId)
+    {
+        RequireAuthenticated(user);
+        switch (user.Role)
+        {
+            case Role.Copyist:
+            case Role.Reviewer:
+                if (!user.IsAssignedToRoom(roomId))
+                    throw new ForbiddenException("User is not assigned to this room (BR-06).");
+                break;
+            case Role.Administrator:
+                break; // unrestricted
+            default: // RegistryHead
+                if (!user.IsAssignedToCourt(courtId))
+                    throw new ForbiddenException("User is not assigned to this court (BR-06).");
+                break;
+        }
+    }
 }

@@ -94,8 +94,11 @@ export interface DeletableMisc {
 export interface DeletionTargets { normals: DeletableCopy[]; miscs: DeletableMisc[]; }
 export interface Lookup { id: string; name: string; }
 export interface UserDto {
-  id: string; username: string; displayName: string; role: Role; isActive: boolean; courtIds: string[];
+  id: string; username: string; displayName: string; role: Role; isActive: boolean;
+  courtIds: string[]; roomIds: string[];
 }
+/** A user assigned to a court/room, for the admin per-court/per-room assignee panels. */
+export interface AssignedUser { id: string; username: string; displayName: string; role: Role; }
 export interface Judge { id: string; name: string; isActive: boolean; roomIds: string[]; }
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
@@ -244,7 +247,7 @@ export const api = {
 
   // ── Lookups ──
   lookupCourts: () => request<Court[]>("/api/lookups/courts"),
-  lookupCopyists: (courtId: string) => request<Lookup[]>(`/api/lookups/courts/${courtId}/copyists`),
+  lookupCopyists: (roomId: string) => request<Lookup[]>(`/api/lookups/rooms/${roomId}/copyists`),
   lookupRooms: (courtId: string) => request<Room[]>(`/api/lookups/courts/${courtId}/rooms`),
   lookupJudges: (roomId: string) => request<Lookup[]>(`/api/lookups/rooms/${roomId}/judges`),
   /** FR-19-adjacent: all active judges (any court/room) — for a delegated (ندباً) panel member. */
@@ -339,6 +342,15 @@ export const api = {
       request<void>(`/api/admin/users/${id}/active`, { method: "PUT", body: JSON.stringify({ isActive }) }),
     setUserCourts: (id: string, courtIds: string[]) =>
       request<void>(`/api/admin/users/${id}/courts`, { method: "PUT", body: JSON.stringify({ courtIds }) }),
+    setUserRooms: (id: string, roomIds: string[]) =>
+      request<void>(`/api/admin/users/${id}/rooms`, { method: "PUT", body: JSON.stringify({ roomIds }) }),
+    // Per-room / per-court assignee panels (view + unassign)
+    roomUsers: (roomId: string) => request<AssignedUser[]>(`/api/admin/rooms/${roomId}/users`),
+    unassignRoomUser: (roomId: string, userId: string) =>
+      request<void>(`/api/admin/rooms/${roomId}/users/${userId}`, { method: "DELETE" }),
+    courtUsers: (courtId: string) => request<AssignedUser[]>(`/api/admin/courts/${courtId}/users`),
+    unassignCourtUser: (courtId: string, userId: string) =>
+      request<void>(`/api/admin/courts/${courtId}/users/${userId}`, { method: "DELETE" }),
     resetPassword: (id: string, password: string) =>
       request<void>(`/api/admin/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password }) }),
 

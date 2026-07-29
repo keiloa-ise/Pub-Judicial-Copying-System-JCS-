@@ -35,6 +35,13 @@ public interface IAdminStore
     Task UpdateUserAsync(Guid id, string displayName, Role role, CancellationToken ct);
     Task SetUserActiveAsync(Guid id, bool active, CancellationToken ct);
     Task SetUserCourtsAsync(Guid id, IReadOnlyCollection<Guid> courtIds, CancellationToken ct);
+    Task SetUserRoomsAsync(Guid id, IReadOnlyCollection<Guid> roomIds, CancellationToken ct);
+    /// <summary>Copyists/Reviewers assigned to a room (for the room's assignee panel).</summary>
+    Task<IReadOnlyList<AssignedUserDto>> ListRoomUsersAsync(Guid roomId, CancellationToken ct);
+    /// <summary>Registry Heads assigned to a court (for the court's assignee panel).</summary>
+    Task<IReadOnlyList<AssignedUserDto>> ListCourtUsersAsync(Guid courtId, CancellationToken ct);
+    Task RemoveUserRoomAsync(Guid userId, Guid roomId, CancellationToken ct);
+    Task RemoveUserCourtAsync(Guid userId, Guid courtId, CancellationToken ct);
     Task SetPasswordHashAsync(Guid id, string passwordHash, CancellationToken ct);
 
     // Judges (FR-04) — a judge is assigned to one or more rooms (غرف).

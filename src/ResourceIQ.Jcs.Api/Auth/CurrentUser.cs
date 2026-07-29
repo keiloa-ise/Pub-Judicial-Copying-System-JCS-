@@ -26,6 +26,9 @@ public sealed class CurrentUser : ICurrentUser
         CourtIds = principal.FindAll(JwtTokenService.CourtClaim)
             .Select(c => Guid.TryParse(c.Value, out var g) ? g : Guid.Empty)
             .Where(g => g != Guid.Empty).ToHashSet();
+        RoomIds = principal.FindAll(JwtTokenService.RoomClaim)
+            .Select(c => Guid.TryParse(c.Value, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty).ToHashSet();
     }
 
     public Guid Id { get; }
@@ -33,6 +36,8 @@ public sealed class CurrentUser : ICurrentUser
     public Role Role { get; }
     public bool IsAuthenticated { get; }
     public IReadOnlyCollection<Guid> CourtIds { get; }
+    public IReadOnlyCollection<Guid> RoomIds { get; } = [];
 
     public bool IsAssignedToCourt(Guid courtId) => CourtIds.Contains(courtId);
+    public bool IsAssignedToRoom(Guid roomId) => RoomIds.Contains(roomId);
 }

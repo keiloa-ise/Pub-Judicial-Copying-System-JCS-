@@ -15,6 +15,9 @@ internal sealed class FakeCurrentUser : ICurrentUser
     public HashSet<Guid> Courts { get; } = new();
     public IReadOnlyCollection<Guid> CourtIds => Courts;
     public bool IsAssignedToCourt(Guid courtId) => Courts.Contains(courtId);
+    public HashSet<Guid> Rooms { get; } = new();
+    public IReadOnlyCollection<Guid> RoomIds => Rooms;
+    public bool IsAssignedToRoom(Guid roomId) => Rooms.Contains(roomId);
 }
 
 internal sealed class FakeClock(DateTimeOffset now) : IClock
@@ -162,7 +165,7 @@ internal sealed class FakeQueries : IJcsQueries
     public Task<IReadOnlyList<AuditEntryDto>> GetAuditAsync(Guid copyRequestId, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<CourtDto>> ListCourtsAsync(IReadOnlyCollection<Guid>? restrictTo, bool activeOnly, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<RoomDto>> ListRoomsAsync(Guid? courtId, bool activeOnly, CancellationToken ct) => throw new NotImplementedException();
-    public Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndCourtAsync(Role role, Guid courtId, CancellationToken ct) => throw new NotImplementedException();
+    public Task<IReadOnlyList<LookupItem>> ListUsersByRoleAndRoomAsync(Role role, Guid roomId, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListJudgesByRoomAsync(Guid roomId, CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListActiveJudgesAsync(CancellationToken ct) => throw new NotImplementedException();
     public Task<IReadOnlyList<LookupItem>> ListPanelMemberTitlesAsync(CancellationToken ct) => throw new NotImplementedException();

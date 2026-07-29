@@ -27,7 +27,7 @@ public sealed class PrepareCopyService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireRole(currentUser, Role.Copyist);          // BR-02
-        Guard.RequireAssignedCourt(currentUser, request.CourtId); // BR-06
+        Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06
         if (request.AssignedCopyistId != currentUser.Id)
             throw new ForbiddenException("Only the assigned copyist may edit this copy (BR-02).");
 

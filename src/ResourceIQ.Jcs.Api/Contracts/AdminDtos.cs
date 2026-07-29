@@ -18,6 +18,7 @@ public sealed record CreateUserRequest(
 public sealed record UpdateUserRequest(string DisplayName, Role Role);
 public sealed record SetActiveRequest(bool IsActive);
 public sealed record SetCourtsRequest(Guid[] CourtIds);
+public sealed record SetRoomsRequest(Guid[] RoomIds);
 public sealed record ResetPasswordRequest(string Password);
 
 public sealed record CreateJudgeRequest(string Name, Guid[] RoomIds);

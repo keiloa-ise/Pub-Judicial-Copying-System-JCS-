@@ -1,12 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type UserDto, type Court, type Role } from "../../api/client";
+import { api, type UserDto, type Court, type Room, type Role } from "../../api/client";
 import { useL, ErrorBox, Spinner, roleLabels, Modal, useSort, SortTh } from "../../app/ui";
 import { useI18n } from "../../i18n";
 
 const roles: Role[] = ["Administrator", "RegistryHead", "Copyist", "Reviewer"];
 
-/** FR-02/FR-05: Administrator fully manages users — create, edit (role/name/courts),
- *  reset password, and enable/disable. */
+/** Copyists and Reviewers are scoped to ROOMS (BR-06); Registry Heads to COURTS; Administrators unrestricted. */
+const isRoomScoped = (r: Role) => r === "Copyist" || r === "Reviewer";
+const isCourtScoped = (r: Role) => r === "RegistryHead";
+
+/** FR-02/FR-05: Administrator fully manages users — create, edit (role/name/scope),
+ *  reset password, and enable/disable. Scope is rooms for copyist/reviewer, courts for head. */
 export function UsersPage() {
   const L = useL();
   const { lang } = useI18n();
@@ -14,6 +18,7 @@ export function UsersPage() {
 
   const [users, setUsers] = useState<UserDto[] | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,23 +29,30 @@ export function UsersPage() {
   const [role, setRole] = useState<Role>("Copyist");
   const [password, setPassword] = useState("");
   const [courtIds, setCourtIds] = useState<string[]>([]);
+  const [roomIds, setRoomIds] = useState<string[]>([]);
 
   // inline edit
   const [editing, setEditing] = useState<UserDto | null>(null);
   const [edName, setEdName] = useState("");
   const [edRole, setEdRole] = useState<Role>("Copyist");
   const [edCourts, setEdCourts] = useState<string[]>([]);
+  const [edRooms, setEdRooms] = useState<string[]>([]);
 
-  const load = () => Promise.all([api.admin.listUsers(), api.admin.listCourts()])
-    .then(([u, c]) => { setUsers(u); setCourts(c); }).catch((e) => setErr(e.message));
+  const load = () => Promise.all([api.admin.listUsers(), api.admin.listCourts(), api.admin.listRooms()])
+    .then(([u, c, r]) => { setUsers(u); setCourts(c); setRooms(r); }).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
   const courtName = (id: string) => courts.find((c) => c.id === id)?.name ?? id;
+  const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? id;
+  const scopeText = (u: UserDto) =>
+    isRoomScoped(u.role) ? (u.roomIds.map(roomName).join("، ") || "—")
+    : isCourtScoped(u.role) ? (u.courtIds.map(courtName).join("، ") || "—")
+    : L("الكل", "All");
   const sort = useSort<UserDto>(users ?? [], {
     username: (u) => u.username,
     name: (u) => u.displayName,
     role: (u) => roleLabels[u.role][arKey],
-    courts: (u) => u.courtIds.map(courtName).sort().join("، "),
+    scope: (u) => scopeText(u),
     status: (u) => u.isActive,
   });
 
@@ -58,14 +70,19 @@ export function UsersPage() {
   function create(e: FormEvent) {
     e.preventDefault();
     run(L("تمت إضافة المستخدم.", "User created."), async () => {
-      await api.admin.createUser({ username, displayName, role, password, courtIds });
-      setUsername(""); setDisplayName(""); setPassword(""); setCourtIds([]);
+      // Copyist/Reviewer carry no court rows; their scope is the room set (assigned right after create).
+      const { id } = await api.admin.createUser({
+        username, displayName, role, password, courtIds: isCourtScoped(role) ? courtIds : [],
+      });
+      if (isRoomScoped(role) && roomIds.length) await api.admin.setUserRooms(id, roomIds);
+      setUsername(""); setDisplayName(""); setPassword(""); setCourtIds([]); setRoomIds([]);
     });
   }
 
   function startEdit(u: UserDto) {
     setOk(null); setErr(null);
-    setEditing(u); setEdName(u.displayName); setEdRole(u.role); setEdCourts(u.courtIds);
+    setEditing(u); setEdName(u.displayName); setEdRole(u.role);
+    setEdCourts(u.courtIds); setEdRooms(u.roomIds);
   }
 
   function saveEdit(e: FormEvent) {
@@ -74,7 +91,8 @@ export function UsersPage() {
     const id = editing.id;
     run(L("تم حفظ التعديلات.", "Changes saved."), async () => {
       await api.admin.updateUser(id, edName, edRole);
-      await api.admin.setUserCourts(id, edCourts);
+      if (isRoomScoped(edRole)) await api.admin.setUserRooms(id, edRooms);
+      else if (isCourtScoped(edRole)) await api.admin.setUserCourts(id, edCourts);
       setEditing(null);
     });
   }
@@ -83,6 +101,46 @@ export function UsersPage() {
     const pwd = window.prompt(L(`كلمة مرور جديدة لـ ${u.username}:`, `New password for ${u.username}:`)) ?? "";
     if (pwd.trim()) run(L("تم تعيين كلمة المرور.", "Password reset."), () => api.admin.resetPassword(u.id, pwd));
   }
+
+  /** Court checkboxes (Registry Head scope). */
+  const CourtPicker = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string, on: boolean) => void }) => (
+    <div className="chips">
+      {courts.map((c) => (
+        <label key={c.id} className="chip">
+          <input type="checkbox" checked={selected.includes(c.id)} onChange={(e) => onToggle(c.id, e.target.checked)} />
+          {c.name}
+        </label>
+      ))}
+    </div>
+  );
+
+  /** Room checkboxes grouped by court (Copyist/Reviewer scope — may span courts). */
+  const RoomPicker = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string, on: boolean) => void }) => (
+    <div className="scope-rooms">
+      {courts.map((c) => {
+        const courtRooms = rooms.filter((r) => r.courtId === c.id);
+        if (courtRooms.length === 0) return null;
+        return (
+          <div key={c.id} style={{ marginBottom: 8 }}>
+            <div className="muted" style={{ fontWeight: 600 }}>{c.name}</div>
+            <div className="chips">
+              {courtRooms.map((r) => (
+                <label key={r.id} className="chip">
+                  <input type="checkbox" checked={selected.includes(r.id)} onChange={(e) => onToggle(r.id, e.target.checked)} />
+                  {r.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const scopeLabel = (r: Role) =>
+    isRoomScoped(r) ? L("الغرف المخصّصة (BR-06)", "Assigned rooms (BR-06)")
+    : isCourtScoped(r) ? L("المحاكم المخصّصة (BR-06)", "Assigned courts (BR-06)")
+    : L("النطاق", "Scope");
 
   return (
     <>
@@ -102,18 +160,15 @@ export function UsersPage() {
                 {roles.map((r) => <option key={r} value={r}>{roleLabels[r][arKey]}</option>)}
               </select></label>
           </div>
-          <label className="field">
-            <span>{L("المحاكم المخصّصة (BR-06)", "Assigned courts (BR-06)")}</span>
-            <div className="chips">
-              {courts.map((c) => (
-                <label key={c.id} className="chip">
-                  <input type="checkbox" checked={edCourts.includes(c.id)}
-                    onChange={(e) => setEdCourts((ids) => toggleIn(ids, c.id, e.target.checked))} />
-                  {c.name}
-                </label>
-              ))}
-            </div>
-          </label>
+          {isRoomScoped(edRole) ? (
+            <label className="field"><span>{scopeLabel(edRole)}</span>
+              <RoomPicker selected={edRooms} onToggle={(id, on) => setEdRooms((ids) => toggleIn(ids, id, on))} /></label>
+          ) : isCourtScoped(edRole) ? (
+            <label className="field"><span>{scopeLabel(edRole)}</span>
+              <CourtPicker selected={edCourts} onToggle={(id, on) => setEdCourts((ids) => toggleIn(ids, id, on))} /></label>
+          ) : (
+            <p className="muted">{L("المدير يصل إلى كل المحاكم والغرف.", "Administrators access all courts and rooms.")}</p>
+          )}
           <div className="btn-row">
             <button className="btn" disabled={busy}>{L("حفظ", "Save")}</button>
             <button className="btn btn--ghost" type="button" onClick={() => setEditing(null)}>{L("إلغاء", "Cancel")}</button>
@@ -138,18 +193,15 @@ export function UsersPage() {
           <label className="field"><span>{L("كلمة المرور", "Password")}</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         </div>
-        <label className="field">
-          <span>{L("المحاكم المخصّصة (BR-06)", "Assigned courts (BR-06)")}</span>
-          <div className="chips">
-            {courts.map((c) => (
-              <label key={c.id} className="chip">
-                <input type="checkbox" checked={courtIds.includes(c.id)}
-                  onChange={(e) => setCourtIds((ids) => toggleIn(ids, c.id, e.target.checked))} />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        </label>
+        {isRoomScoped(role) ? (
+          <label className="field"><span>{scopeLabel(role)}</span>
+            <RoomPicker selected={roomIds} onToggle={(id, on) => setRoomIds((ids) => toggleIn(ids, id, on))} /></label>
+        ) : isCourtScoped(role) ? (
+          <label className="field"><span>{scopeLabel(role)}</span>
+            <CourtPicker selected={courtIds} onToggle={(id, on) => setCourtIds((ids) => toggleIn(ids, id, on))} /></label>
+        ) : (
+          <p className="muted">{L("المدير يصل إلى كل المحاكم والغرف.", "Administrators access all courts and rooms.")}</p>
+        )}
         <button className="btn" disabled={busy}>{L("إضافة مستخدم", "Add user")}</button>
       </form>
 
@@ -159,7 +211,7 @@ export function UsersPage() {
             <SortTh label={L("المستخدم", "Username")} k="username" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
             <SortTh label={L("الاسم", "Name")} k="name" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
             <SortTh label={L("الدور", "Role")} k="role" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
-            <SortTh label={L("المحاكم", "Courts")} k="courts" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
+            <SortTh label={L("النطاق (محاكم/غرف)", "Scope (courts/rooms)")} k="scope" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
             <SortTh label={L("الحالة", "Status")} k="status" sortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.onSort} />
             <th></th>
           </tr></thead>
@@ -169,7 +221,7 @@ export function UsersPage() {
                 <td>{u.username}</td>
                 <td>{u.displayName}</td>
                 <td>{roleLabels[u.role][arKey]}</td>
-                <td>{u.courtIds.map(courtName).join("، ") || "—"}</td>
+                <td>{scopeText(u)}</td>
                 <td>{u.isActive ? <span className="badge s-approved">{L("نشط", "Active")}</span> : <span className="badge s-unlocked">{L("معطّل", "Disabled")}</span>}</td>
                 <td>
                   <div className="btn-row" style={{ margin: 0 }}>

@@ -17,13 +17,17 @@ public sealed class LookupService(ICurrentUser currentUser, IJcsQueries queries)
         return queries.ListCourtsAsync(restrict, activeOnly: true, ct);
     }
 
-    /// <summary>Copyists assigned to a court (for the create-request assignee picker).</summary>
-    public Task<IReadOnlyList<LookupItem>> CopyistsInCourtAsync(Guid courtId, CancellationToken ct)
+    /// <summary>Copyists assigned to a ROOM (for the create-request assignee picker). Copyists are
+    /// room-scoped, so the assignee list is the copyists who hold that specific room.</summary>
+    public async Task<IReadOnlyList<LookupItem>> CopyistsInRoomAsync(Guid roomId, CancellationToken ct)
     {
         Guard.RequireAuthenticated(currentUser);
-        if (currentUser.Role != Role.Administrator && !currentUser.IsAssignedToCourt(courtId))
+        var room = await queries.GetRoomAsync(roomId, ct)
+                   ?? throw new ForbiddenException("Room not found.");
+        // The caller (Registry Head) may assign within their court; Administrator anywhere.
+        if (currentUser.Role != Role.Administrator && !currentUser.IsAssignedToCourt(room.CourtId))
             throw new ForbiddenException("Not assigned to this court (BR-06).");
-        return queries.ListUsersByRoleAndCourtAsync(Role.Copyist, courtId, ct);
+        return await queries.ListUsersByRoleAndRoomAsync(Role.Copyist, roomId, ct);
     }
 
     /// <summary>Active rooms (غرف) of a court the caller may use (for the create-request room picker).</summary>
