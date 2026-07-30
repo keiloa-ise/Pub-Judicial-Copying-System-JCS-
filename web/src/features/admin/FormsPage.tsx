@@ -67,7 +67,7 @@ export function FormsPage() {
   return (
     <>
       <h1 className="page-title">{L("النماذج (أنواع القرارات)", "Templates (decision types)")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       <form className="card" onSubmit={submit} style={editingId ? { borderInlineStart: "5px solid var(--gold)" } : undefined}>
         <h3>{editingId ? L("تعديل النموذج", "Edit template") : L("إضافة نموذج", "Add template")}</h3>

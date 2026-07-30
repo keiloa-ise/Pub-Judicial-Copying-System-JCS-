@@ -66,7 +66,7 @@ export function BatchPrintPage() {
       </p>
 
       <div className="card" style={{ maxWidth: 760 }}>
-        {err && <ErrorBox message={err} />}
+        {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
         <div className="row">
           <label className="field">

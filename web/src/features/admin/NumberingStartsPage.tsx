@@ -61,7 +61,7 @@ export function NumberingStartsPage() {
         {L("عند الإطلاق: أدخل «آخر رقم صدر» لكل محكمة/مستوى وسنة، فيبدأ النظام من الرقم التالي. لا يمكن الضبط أقل من أعلى رقم مُستخدَم فعلاً في النظام.",
            "At go-live: enter the last issued number per court/scope and year; the system continues at the next number. You can't set below the highest number already used.")}
       </p>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {ok && <div className="okbox">{ok}</div>}
 
       <div className="card">

@@ -75,7 +75,7 @@ export function PrintCopyPage({ id }: { id: string }) {
         <div className="returnbanner">{L("هذه نسخة غير معتمدة — تُطبع بعلامة «مسودة قرار».",
           "This copy is not approved — it prints with a “draft” watermark.")}</div>
       )}
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {ok && <div className="okbox">{ok}</div>}
 
       <div className="print-toolbar noprint">

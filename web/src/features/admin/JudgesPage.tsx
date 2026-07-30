@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type Judge, type Court, type Room } from "../../api/client";
-import { useL, ErrorBox, Spinner, Modal, useSort, SortTh } from "../../app/ui";
+import { useL, ErrorBox, Spinner, Modal, SearchableMultiSelect, useSort, SortTh } from "../../app/ui";
 
 /** FR-04: Administrator manages judges. A judge must be assigned to one or more rooms (غرف),
  *  and judges are editable (name, status, room assignments). The room determines the court. */
@@ -36,8 +36,15 @@ export function JudgesPage() {
     rooms: (j) => j.roomIds.map(roomLabelFor).sort().join("، "),
     status: (j) => j.isActive,
   });
-
-  const toggle = (list: string[], id: string, on: boolean) => on ? [...list, id] : list.filter((x) => x !== id);
+  const roomOptions = rooms.map((r) => {
+    const court = courts.find((c) => c.id === r.courtId);
+    return {
+      id: r.id,
+      label: `${r.name} (${r.code})`,
+      group: court?.name,
+      searchText: `${r.name} ${r.code} ${court?.name ?? ""} ${court?.code ?? ""}`,
+    };
+  });
 
   async function run(fn: () => Promise<unknown>) {
     setErr(null); setBusy(true);
@@ -60,35 +67,23 @@ export function JudgesPage() {
     run(async () => { await api.admin.updateJudge(j.id, edName, j.isActive, edRooms); setEditing(null); });
   }
 
-  // Room picker: rooms grouped by their court.
-  const RoomPicker = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string, on: boolean) => void }) => (
-    <div className="chips" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      {courts.length === 0 && <span className="muted">{L("أضف محكمة وغرفة أولاً", "Add a court and a room first")}</span>}
-      {courts.map((c) => {
-        const courtRooms = rooms.filter((r) => r.courtId === c.id);
-        if (courtRooms.length === 0) return null;
-        return (
-          <div key={c.id}>
-            <div className="muted" style={{ marginBottom: 4 }}>{c.name}</div>
-            <div className="chips">
-              {courtRooms.map((r) => (
-                <label key={r.id} className="chip">
-                  <input type="checkbox" checked={selected.includes(r.id)}
-                    onChange={(e) => onToggle(r.id, e.target.checked)} />
-                  {r.name} ({r.code})
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+  const RoomPicker = ({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) => (
+    <SearchableMultiSelect
+      options={roomOptions}
+      selected={selected}
+      onChange={onChange}
+      placeholder={L("ابحث باسم الغرفة أو رمزها أو المحكمة...", "Search by room, code, or court...")}
+      emptyLabel={courts.length === 0
+        ? L("أضف محكمة وغرفة أولاً.", "Add a court and a room first.")
+        : L("لا توجد غرف مطابقة.", "No matching rooms.")}
+      selectedLabel={L("الغرف المختارة", "Selected rooms")}
+    />
   );
 
   return (
     <>
       <h1 className="page-title">{L("القضاة", "Judges")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={L("تعديل القاضي", "Edit judge")}>
         <form className="card" onSubmit={saveEdit}>
@@ -96,7 +91,7 @@ export function JudgesPage() {
             <input value={edName} onChange={(e) => setEdName(e.target.value)} required /></label>
           <label className="field">
             <span>{L("الغرف (واحدة على الأقل)", "Rooms (at least one)")}</span>
-            <RoomPicker selected={edRooms} onToggle={(id, on) => setEdRooms((ids) => toggle(ids, id, on))} />
+            <RoomPicker selected={edRooms} onChange={setEdRooms} />
           </label>
           <div className="btn-row">
             <button className="btn" disabled={busy}>{L("حفظ", "Save")}</button>
@@ -111,7 +106,7 @@ export function JudgesPage() {
           <input value={name} onChange={(e) => setName(e.target.value)} required /></label>
         <label className="field">
           <span>{L("الغرف (واحدة على الأقل)", "Rooms (at least one)")}</span>
-          <RoomPicker selected={roomIds} onToggle={(id, on) => setRoomIds((ids) => toggle(ids, id, on))} />
+          <RoomPicker selected={roomIds} onChange={setRoomIds} />
         </label>
         <button className="btn" disabled={busy || roomIds.length === 0}>{L("إضافة قاضٍ", "Add judge")}</button>
       </form>
