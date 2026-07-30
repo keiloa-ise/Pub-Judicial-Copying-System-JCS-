@@ -34,9 +34,15 @@ public sealed class ReviewService(
 
         // FR-10/BR-10: the Reviewer approves in the SAME priority order the Copyist accepts — highest
         // tier (موقوف > مستعجل > عادي) then oldest-first. Cannot approve this copy while a higher-ranked
-        // copy is still under review in the reviewer's courts.
-        if (await repository.AnyUnderReviewRankedBeforeAsync(currentUser.CourtIds, request.Urgency, request.CreatedUtc, ct))
-            throw new DomainException("يجب اعتماد القرارات حسب الأولوية: الأعلى أولوية ثم الأقدم أولاً.");
+        // copy is still under review in the reviewer's ROOMS; the message names those copies.
+        var rankedBefore = await repository.ListUnderReviewRankedBeforeAsync(
+            currentUser.RoomIds, request.Urgency, request.CreatedUtc, ct);
+        if (rankedBefore.Count > 0)
+        {
+            var numbers = string.Join("، ", rankedBefore.Select(r => r.CopyNumber ?? $"متفرق {r.MiscNumber}"));
+            throw new DomainException(
+                $"يجب اعتماد القرارات حسب الأولوية: الأعلى أولوية ثم الأقدم أولاً. القرارات الواجب اعتمادها أولاً: {numbers}.");
+        }
 
         request.Approve(currentUser.Id, clock.UtcNow); // UnderReview → Approved (locked)
         audit.Append(request.Id, AuditAction.Approve);

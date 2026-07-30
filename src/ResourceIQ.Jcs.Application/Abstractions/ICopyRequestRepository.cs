@@ -2,6 +2,10 @@ using ResourceIQ.Jcs.Domain.Entities;
 
 namespace ResourceIQ.Jcs.Application.Abstractions;
 
+/// <summary>A copy identified for a user-facing priority-order message — its رقم النسخة (عادي) or,
+/// for a متفرق, its رقم المتفرق.</summary>
+public sealed record RankedCopyRef(string? CopyNumber, int? MiscNumber);
+
 /// <summary>
 /// Read/add/remove access to copy requests. Delete exists only for the Reviewer's "delete the
 /// latest entry" flow (FR-16): the copy row and its content are removed, but audit history (a
@@ -28,11 +32,12 @@ public interface ICopyRequestRepository
     Task<bool> AnyUnacceptedRankedBeforeAsync(
         Guid copyistId, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
 
-    /// <summary>FR-10/BR-10: true if any copy still UNDER REVIEW in the given courts ranks BEFORE the
-    /// given one — higher priority tier, or the same tier but **older** (created earlier). The Reviewer
-    /// must approve in the SAME order the Copyist accepts: موقوف > مستعجل > عادي, then oldest-first.</summary>
-    Task<bool> AnyUnderReviewRankedBeforeAsync(
-        IReadOnlyCollection<Guid> courtIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
+    /// <summary>FR-10/BR-10: the copies still UNDER REVIEW in the reviewer's <paramref name="roomIds"/>
+    /// that rank BEFORE the given one — higher priority tier, or the same tier but **older** — ordered by
+    /// that same priority (موقوف > مستعجل > عادي, then oldest-first) so the FIRST is the next to approve.
+    /// Empty when the given copy is next in line. Used to both gate approval and name the blocking copies.</summary>
+    Task<IReadOnlyList<RankedCopyRef>> ListUnderReviewRankedBeforeAsync(
+        IReadOnlyCollection<Guid> roomIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
 
     /// <summary>FR-15 print ordering: true if any NOT-YET-PRINTED copy in the given courts, in the same
     /// print queue (<paramref name="isApproved"/> = approved vs draft), ranks BEFORE the given one —

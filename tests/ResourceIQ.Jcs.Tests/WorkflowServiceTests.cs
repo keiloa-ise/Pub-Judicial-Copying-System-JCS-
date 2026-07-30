@@ -94,9 +94,11 @@ public class WorkflowServiceTests
         reviewer.Rooms.Add(normal.RoomId);
         var svc = new ReviewService(reviewer, _clock, _repo, _audit, _uow);
 
-        // Approving the lower-priority عادي while a موقوف is still under review is rejected.
-        await Assert.ThrowsAsync<DomainException>(() =>
+        // Approving the lower-priority عادي while a موقوف is still under review is rejected — and the
+        // message names the higher-priority copy that must be approved first.
+        var ex = await Assert.ThrowsAsync<DomainException>(() =>
             svc.ApproveAsync(new ApproveCommand(normal.Id), CancellationToken.None));
+        Assert.Contains("00000001", ex.Message); // the موقوف copy's number is listed
         Assert.Equal(CopyState.UnderReview, normal.State);
 
         // Approving the higher-priority موقوف first is allowed.
