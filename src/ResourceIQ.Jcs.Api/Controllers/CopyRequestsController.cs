@@ -144,7 +144,7 @@ public sealed class CopyRequestsController(
         var req = await createService.HandleAsync(new CreateCopyRequestCommand(
             body.CourtId, body.RoomId, body.CaseFilingDate, body.CaseBaseNumber,
             body.Category, body.Urgency, body.ExpediteRequestNumber, body.ReferenceNumber, body.AssignedCopyistId,
-            body.OriginalCopyId), ct);
+            body.OriginalCopyId, body.Year, body.IssueHijri, body.IssueGregorian), ct);
         return CreatedAtAction(nameof(Create), new { id = req.Id }, new { req.Id, req.CopyNumber, state = req.State.ToString() });
     }
 

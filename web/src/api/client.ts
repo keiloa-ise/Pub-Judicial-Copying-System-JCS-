@@ -216,6 +216,7 @@ export const api = {
     courtId: string; roomId: string; caseFilingDate: string | null; caseBaseNumber: string;
     category: CaseCategory; urgency: CaseUrgency; expediteRequestNumber: string | null;
     referenceNumber: string | null; assignedCopyistId: string; originalCopyId: string | null;
+    year?: string | null; issueHijri?: string | null; issueGregorian?: string | null;
   }) => request<{ id: string; copyNumber: string; state: string }>(
     "/api/copy-requests", { method: "POST", body: JSON.stringify(body) }),
   // FR-07: copyist accepts the copy before editing. FR-06: head escalates a non-approved copy.

@@ -17,7 +17,12 @@ public sealed record CreateCopyRequestCommand(
     string? ExpediteRequestNumber,
     string? ReferenceNumber,
     Guid AssignedCopyistId,
-    Guid? OriginalCopyId);
+    Guid? OriginalCopyId,
+    // FR-06: the Registry Head enters the issue date (هجري/ميلادي) and السنة on the new-request form;
+    // they are seeded into the copy's content so the copyist no longer edits them.
+    string? Year = null,
+    string? IssueHijri = null,
+    string? IssueGregorian = null);
 // Note: تاريخ الحجز (ReservationDate) is NOT a client input — the server assigns it at creation.
 
 /// <summary>
@@ -96,6 +101,12 @@ public sealed class CreateCopyRequestService(
             // Created → InPreparation, routed to the copyist queue.
             request.AssignToCopyist(cmd.AssignedCopyistId, now);
 
+            // FR-06: seed the Head-entered issue date/year into the copy's content (the copyist no
+            // longer edits these — they moved to the new-request form).
+            var initialFieldValues = BuildInitialFieldValues(cmd);
+            if (initialFieldValues is not null)
+                request.SeedInitialFieldValues(initialFieldValues, now);
+
             await repository.AddAsync(request, token);
             var copyJson = request.CopyNumber is null ? "null" : $"\"{request.CopyNumber}\"";
             var miscJson = request.MiscNumber?.ToString() ?? "null";
@@ -106,5 +117,19 @@ public sealed class CreateCopyRequestService(
             await unitOfWork.SaveChangesAsync(token);
             return request;
         }, ct);
+    }
+
+    /// <summary>Builds the FieldValues JSON for the Head-entered issue date/year, skipping empty inputs.
+    /// Returns null when none were provided (so no content is seeded).</summary>
+    private static string? BuildInitialFieldValues(CreateCopyRequestCommand cmd)
+    {
+        var obj = new System.Text.Json.Nodes.JsonObject();
+        if (!string.IsNullOrWhiteSpace(cmd.Year)) obj["year"] = cmd.Year.Trim();
+        if (!string.IsNullOrWhiteSpace(cmd.IssueHijri)) obj["issueHijri"] = cmd.IssueHijri.Trim();
+        if (!string.IsNullOrWhiteSpace(cmd.IssueGregorian)) obj["issueGregorian"] = cmd.IssueGregorian.Trim();
+        return obj.Count == 0
+            ? null
+            : obj.ToJsonString(new System.Text.Json.JsonSerializerOptions
+            { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
     }
 }

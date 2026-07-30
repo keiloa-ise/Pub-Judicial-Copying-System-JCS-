@@ -39,6 +39,10 @@ export function CreateRequestPage() {
   const [urgency, setUrgency] = useState<CaseUrgency>("Normal");
   const [expediteNo, setExpediteNo] = useState("");
   const [referenceNo, setReferenceNo] = useState("");
+  // FR-06: issue date/year entered by the Registry Head (moved out of the copyist's window).
+  const [year, setYear] = useState("");
+  const [issueHijri, setIssueHijri] = useState("");
+  const [issueGregorian, setIssueGregorian] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const searchSeq = useRef(0);
@@ -100,7 +104,8 @@ export function CreateRequestPage() {
   // because the reset logic lives in pickCourt/pickRoom (not effects), restored fields are never wiped.
   const draftPayload = useMemo(() => ({
     courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo,
-  }), [courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo]);
+    year, issueHijri, issueGregorian,
+  }), [courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo, year, issueHijri, issueGregorian]);
   const autoSave = useAutoSaveDraft({
     userId: user?.userId, role: user?.role,
     formKey: user ? `registry-head:create-copy-request:${user.userId}` : null,
@@ -112,6 +117,7 @@ export function CreateRequestPage() {
       setCaseBase(asStr(p.caseBase)); setCategory(p.category === "Miscellaneous" ? "Miscellaneous" : "Normal");
       setUrgency(p.urgency === "Suspended" || p.urgency === "Expedited" ? p.urgency : "Normal");
       setExpediteNo(asStr(p.expediteNo)); setReferenceNo(asStr(p.referenceNo));
+      setYear(asStr(p.year)); setIssueHijri(asStr(p.issueHijri)); setIssueGregorian(asStr(p.issueGregorian));
     },
   });
 
@@ -139,6 +145,9 @@ export function CreateRequestPage() {
         expediteRequestNumber: urgency === "Expedited" ? expediteNo : null,
         referenceNumber: isMisc && referenceNo ? referenceNo : null,
         originalCopyId: isMisc ? originalId : null,
+        year: year.trim() || null,
+        issueHijri: issueHijri.trim() || null,
+        issueGregorian: issueGregorian || null,
       });
       await autoSave.clearDraft(); // JC-32: work is committed — drop the recovery draft
       navigate("request", res.id);
@@ -269,6 +278,22 @@ export function CreateRequestPage() {
               <input value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} />
             </label>
           )}
+        </div>
+
+        {/* FR-06: issue date/year — entered by the Registry Head here (moved out of the copyist window). */}
+        <div className="row">
+          <label className="field">
+            <span>{L("السنة", "Year")}</span>
+            <input value={year} onChange={(e) => setYear(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>{L("تاريخ الإصدار (هجري)", "Issue date (Hijri)")}</span>
+            <input value={issueHijri} onChange={(e) => setIssueHijri(e.target.value)} lang="ar" />
+          </label>
+          <label className="field">
+            <span>{L("تاريخ الإصدار (ميلادي)", "Issue date (Gregorian)")}</span>
+            <input type="date" value={issueGregorian} onChange={(e) => setIssueGregorian(e.target.value)} />
+          </label>
         </div>
 
         <p className="muted" style={{ fontSize: 13 }}>

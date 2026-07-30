@@ -219,6 +219,18 @@ public class CopyRequest
             throw new DomainException($"Copy is not editable in state {State} (BR-04).");
     }
 
+    /// <summary>Seeds initial fixed-field values into the content at CREATION — the Registry Head enters
+    /// the issue date (هجري/ميلادي) and السنة on the new-request form. Creates the content row; requires
+    /// the copy to be editable (In preparation). Unlike <see cref="SeedFieldValuesOnAccept"/> it does NOT
+    /// require acceptance (the copyist hasn't accepted yet at creation).</summary>
+    public void SeedInitialFieldValues(string fieldValuesJson, DateTimeOffset nowUtc)
+    {
+        EnsureEditable();
+        Content ??= new CopyContent { CopyRequestId = Id };
+        Content.FieldValuesJson = string.IsNullOrWhiteSpace(fieldValuesJson) ? "{}" : fieldValuesJson;
+        UpdatedUtc = nowUtc;
+    }
+
     /// <summary>One-time pre-fill at acceptance: seeds the fixed field values (specifically الهيئة الحاكمة
     /// = المحكمة/الغرفة) into a freshly created content shell so the copyist opens the editor with the
     /// chamber already populated but still editable. Requires the copy to be accepted and editable;

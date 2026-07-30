@@ -13,6 +13,10 @@ import { RichText, plainToHtml } from "../../components/RichText";
  *  The pairing is by key convention so the form template still drives rendering. */
 const GREGORIAN_KEY = "issueGregorian";
 const HIJRI_KEY = "issueHijri";
+const YEAR_KEY = "year";
+/** Fixed fields the Registry Head now enters on the new-request form — hidden (but preserved) in the
+ *  copyist's editor. Their values still live in FieldValuesJson and print on the PDF. */
+const HEAD_ENTERED_KEYS = [YEAR_KEY, HIJRI_KEY, GREGORIAN_KEY];
 /** Fixed key under which the president's chosen title (صفة) is stored in the field values. */
 const PRESIDENT_TITLE_KEY = "presidentTitle";
 /** The "panel president" capacity (صفة). At most ONE panel member (president slot or a member) may
@@ -453,7 +457,7 @@ export function PreparePage({ id }: { id: string }) {
               </div>
             )}
             <div className="row">
-              {selectedForm.fields.map((fld) => (
+              {selectedForm.fields.filter((fld) => !HEAD_ENTERED_KEYS.includes(fld.key)).map((fld) => (
                 fld.type === "judges" ? (
                   <div className="field" key={fld.id} style={{ flexBasis: "100%" }}>
                     <span>{fld.label} — {L("صفر أو أكثر", "zero or more")}</span>
