@@ -18,5 +18,3 @@ web/.env
 # Local NuGet workaround (large QuestPDF nupkg) — keep folder, ignore packages
 local-nuget/*.nupkg
 
-# Local Codex/API run logs
-codex-run/
