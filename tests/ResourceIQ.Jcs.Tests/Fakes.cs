@@ -92,9 +92,12 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
     public Task<bool> AnyUnacceptedRankedBeforeAsync(Guid copyistId, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => x.AssignedCopyistId == copyistId && x.State == CopyState.InPreparation && x.AcceptedUtc == null
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
-    public Task<bool> AnyUnderReviewRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
-        Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.State == CopyState.UnderReview
-            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
+    public Task<IReadOnlyList<RankedCopyRef>> ListUnderReviewRankedBeforeAsync(IReadOnlyCollection<Guid> roomIds, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<RankedCopyRef>>(_store.Values
+            .Where(x => roomIds.Contains(x.RoomId) && x.State == CopyState.UnderReview
+                && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)))
+            .OrderBy(x => x.Urgency).ThenBy(x => x.CreatedUtc)
+            .Select(x => new RankedCopyRef(x.CopyNumber, x.MiscNumber)).ToList());
     public Task<bool> AnyUnprintedRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, bool isApproved, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
         Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.PrintedUtc == null
             && (x.State == CopyState.Approved) == isApproved

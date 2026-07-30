@@ -57,7 +57,8 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
                 cr.RoomId, rm.Name,
                 cr.CaseBaseNumber, cr.CaseFilingDate, cr.ReservationDate,
                 cr.Category, cr.Urgency, cr.ExpediteRequestNumber, cr.MiscNumber,
-                cr.AssignedCopyistId, u != null ? u.DisplayName : null, cr.CreatedUtc, cr.AcceptedUtc))
+                cr.AssignedCopyistId, u != null ? u.DisplayName : null, cr.CreatedUtc, cr.AcceptedUtc,
+                cr.ReturnedForCorrectionUtc))
             .ToListAsync(ct);
 
         return new Paged<CopyRequestListItem>(items, total, page, pageSize);
@@ -204,7 +205,8 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
                 x.cr.RoomId, x.RoomName,
                 x.cr.CaseBaseNumber, x.cr.CaseFilingDate, x.cr.ReservationDate,
                 x.cr.Category, x.cr.Urgency, x.cr.ExpediteRequestNumber, x.cr.MiscNumber,
-                x.cr.AssignedCopyistId, x.CopyistName, x.cr.CreatedUtc, x.cr.AcceptedUtc))
+                x.cr.AssignedCopyistId, x.CopyistName, x.cr.CreatedUtc, x.cr.AcceptedUtc,
+                x.cr.ReturnedForCorrectionUtc))
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<OriginalCopyOption>> ListSelectableOriginalsAsync(

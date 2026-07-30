@@ -15,6 +15,9 @@ const GREGORIAN_KEY = "issueGregorian";
 const HIJRI_KEY = "issueHijri";
 /** Fixed key under which the president's chosen title (صفة) is stored in the field values. */
 const PRESIDENT_TITLE_KEY = "presidentTitle";
+/** The "panel president" capacity (صفة). At most ONE panel member (president slot or a member) may
+ *  carry it — the system prevents designating a second رئيس هيئة. Matches the seeded title name. */
+const PRESIDENT_TITLE_NAME = "رئيس الهيئة";
 /** «رقم القرار»: auto-generated — mirrors the copy's own auto sequential number (copyNumber).
  *  The copyist never types it; the field renders read-only, pre-filled from copyNumber. */
 const DECISION_NUMBER_KEY = "decisionNumber";
@@ -392,10 +395,18 @@ export function PreparePage({ id }: { id: string }) {
     finally { setBusy(false); }
   }
 
-  const TitleSelect = ({ value, onPick }: { value: string; onPick: (v: string) => void }) => (
+  // At most one "رئيس الهيئة" across the whole panel (president slot + members).
+  const chairCount = ((values[PRESIDENT_TITLE_KEY] ?? "") === PRESIDENT_TITLE_NAME ? 1 : 0)
+    + members.filter((m) => m.title === PRESIDENT_TITLE_NAME).length;
+
+  /** Title (صفة) picker. When <c>disableChair</c>, the "رئيس الهيئة" option is disabled here because it
+   *  is already assigned to another panel member — enforcing a single president. */
+  const TitleSelect = ({ value, onPick, disableChair }: { value: string; onPick: (v: string) => void; disableChair?: boolean }) => (
     <select style={{ width: 170 }} value={value} onChange={(e) => onPick(e.target.value)}>
       <option value="">{L("اختر الصفة", "Select title")}</option>
-      {titleOptions(value).map((t) => <option key={t} value={t}>{t}</option>)}
+      {titleOptions(value).map((t) => (
+        <option key={t} value={t} disabled={disableChair && t === PRESIDENT_TITLE_NAME}>{t}</option>
+      ))}
     </select>
   );
 
@@ -460,6 +471,7 @@ export function PreparePage({ id }: { id: string }) {
                             title={L("صفة القاضي المنتدب — ندباً", "Delegated judge's capacity")} />
                         ) : (
                           <TitleSelect value={m.title}
+                            disableChair={chairCount >= 1 && m.title !== PRESIDENT_TITLE_NAME}
                             onPick={(v) => setMembers(members.map((x, idx) => idx === i ? { ...x, title: v } : x))} />
                         )}
                         <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
@@ -516,6 +528,7 @@ export function PreparePage({ id }: { id: string }) {
                           title={L("صفة القاضي المنتدب — ندباً", "Delegated judge's capacity")} />
                       ) : (
                         <TitleSelect value={values[PRESIDENT_TITLE_KEY] ?? ""}
+                          disableChair={chairCount >= 1 && (values[PRESIDENT_TITLE_KEY] ?? "") !== PRESIDENT_TITLE_NAME}
                           onPick={(v) => setValues((vv) => ({ ...vv, [PRESIDENT_TITLE_KEY]: v }))} />
                       )}
                       <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}

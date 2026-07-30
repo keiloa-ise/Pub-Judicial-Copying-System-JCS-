@@ -29,12 +29,16 @@ public sealed class CopyRequestRepository(JcsDbContext db) : ICopyRequestReposit
             // higher tier (lower enum value = higher priority), OR same tier but created earlier (oldest-first).
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)), ct);
 
-    public Task<bool> AnyUnderReviewRankedBeforeAsync(
-        IReadOnlyCollection<Guid> courtIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
-        db.CopyRequests.AnyAsync(x => courtIds.Contains(x.CourtId)
-            && x.State == Domain.Enums.CopyState.UnderReview
-            // same ranking as copyist acceptance: higher tier, or same tier but created earlier.
-            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)), ct);
+    public async Task<IReadOnlyList<RankedCopyRef>> ListUnderReviewRankedBeforeAsync(
+        IReadOnlyCollection<Guid> roomIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        await db.CopyRequests.AsNoTracking()
+            .Where(x => roomIds.Contains(x.RoomId)
+                && x.State == Domain.Enums.CopyState.UnderReview
+                // same ranking as copyist acceptance: higher tier, or same tier but created earlier.
+                && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)))
+            .OrderBy(x => x.Urgency).ThenBy(x => x.CreatedUtc) // highest-priority + oldest first = next to approve
+            .Select(x => new RankedCopyRef(x.CopyNumber, x.MiscNumber))
+            .ToListAsync(ct);
 
     public Task<bool> AnyUnprintedRankedBeforeAsync(
         IReadOnlyCollection<Guid> courtIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct)

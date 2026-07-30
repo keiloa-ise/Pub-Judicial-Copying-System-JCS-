@@ -160,6 +160,17 @@
 .table tbody tr.row-locked td { filter: blur(3px); user-select: none; }
 .table tbody tr.row-locked { cursor: not-allowed; }
 
+/* 7B: a copy the reviewer returned for correction — amber highlight in the copyist's queue.
+   Declared AFTER row-accepted so it wins when a returned copy is also "accepted". */
+.table tbody tr.row-returned { background: #fff5e6; }
+.table tbody tr.row-returned:hover { background: #ffedcc; }
+.table tbody tr.row-returned td:first-child { box-shadow: inset 3px 0 0 #d98324; }
+.pill--returned {
+  display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 6px;
+  padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: #fbe4c2; color: #8a4b00; white-space: nowrap;
+}
+
 /* Connection-status pill (auto-polling lists) */
 .connstatus { display: inline-flex; align-items: center; gap: 8px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--gray-line); background: var(--white); color: var(--ink); transition: background .15s ease, border-color .15s ease, color .15s ease; }
 .connstatus:hover:not(:disabled) { filter: brightness(0.98); }
@@ -180,6 +191,11 @@
 .kv dt { color: #6b756f; font-weight: 600; }
 .kv dd { margin: 0; }
 .bodybox { white-space: pre-wrap; line-height: 1.9; background: #fafbfa; border: 1px solid var(--gray-line); border-radius: 10px; padding: 16px; font-size: 15px; }
+/* Readable structured decision sections (SectionsJson) in the detail page. */
+.reading-section { margin-bottom: 14px; }
+.reading-section:last-child { margin-bottom: 0; }
+.reading-section__title { font-weight: 700; margin-bottom: 4px; }
+.reading-section__text { white-space: normal; line-height: 1.9; }
 
 .audit { list-style: none; padding: 0; margin: 0; }
 .audit li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--gray-line); font-size: 14px; }

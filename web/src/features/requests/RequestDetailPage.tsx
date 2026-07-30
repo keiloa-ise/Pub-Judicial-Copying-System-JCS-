@@ -76,6 +76,17 @@ export function RequestDetailPage({ id }: { id: string }) {
   const fields: Record<string, unknown> = (() => {
     try { return JSON.parse(detail.fieldValuesJson || "{}"); } catch { return {}; }
   })();
+  // The decision text is the ordered structured sections (SectionsJson); the section text carries the
+  // server-sanitized inline subset (<b>/<i>/<br>) so it is safe to render as HTML for reading.
+  const sections: { title: string; text: string }[] = (() => {
+    try {
+      const arr = JSON.parse(detail.sectionsJson || "[]");
+      return Array.isArray(arr)
+        ? arr.map((s) => ({ title: String(s?.title ?? ""), text: String(s?.text ?? "") }))
+             .filter((s) => s.title.trim() || s.text.trim())
+        : [];
+    } catch { return []; }
+  })();
 
   return (
     <>
@@ -180,7 +191,21 @@ export function RequestDetailPage({ id }: { id: string }) {
 
       <div className="card">
         <h3>{L("نص النسخة", "Copy text")}</h3>
-        <div className="bodybox">{detail.body || <span className="muted">{L("لا يوجد نص بعد", "No text yet")}</span>}</div>
+        {sections.length === 0 && !detail.body ? (
+          <div className="bodybox"><span className="muted">{L("لا يوجد نص بعد", "No text yet")}</span></div>
+        ) : (
+          <div className="bodybox">
+            {/* Ordered structured sections (SectionsJson) rendered as readable text. */}
+            {sections.map((s, i) => (
+              <div key={i} className="reading-section">
+                {s.title.trim() && <div className="reading-section__title">{s.title}</div>}
+                {s.text.trim() && <div className="reading-section__text" dangerouslySetInnerHTML={{ __html: s.text }} />}
+              </div>
+            ))}
+            {/* Legacy free-text body — shown only for old copies that predate the sections model. */}
+            {detail.body && <div className="reading-section__text" dangerouslySetInnerHTML={{ __html: detail.body }} />}
+          </div>
+        )}
       </div>
 
       {/* Role + state actions */}

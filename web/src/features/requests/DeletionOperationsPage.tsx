@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api, type DeletionTargets, type DeletableCopy, type DeletableMisc } from "../../api/client";
 import { useL, ErrorBox, Spinner, Modal, StateBadge } from "../../app/ui";
+import { useConfig } from "../../app/useConfig";
 
 type Target =
   | { kind: "normal"; row: DeletableCopy }
@@ -19,6 +20,9 @@ export function DeletionOperationsPage() {
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Target | null>(null);
+  const cfg = useConfig();
+  // ALLOW_DELETE_APPROVED (default off): approved (مثبت) decisions can't be deleted unless enabled.
+  const approvedBlocked = (state: string) => state === "Approved" && !(cfg?.allowDeleteApproved ?? false);
 
   const load = useCallback(() => {
     setData(null); setErr(null);
@@ -68,8 +72,9 @@ export function DeletionOperationsPage() {
                       <td>{r.roomName}</td>
                       <td><StateBadge state={r.state} /></td>
                       <td>
-                        <button className="btn btn--danger" disabled={r.hasLinkedMisc}
-                          title={r.hasLinkedMisc ? L("توجد قرارات متفرقة مرتبطة — احذفها أولاً", "Has linked متفرق — delete those first") : ""}
+                        <button className="btn btn--danger" disabled={r.hasLinkedMisc || approvedBlocked(r.state)}
+                          title={r.hasLinkedMisc ? L("توجد قرارات متفرقة مرتبطة — احذفها أولاً", "Has linked متفرق — delete those first")
+                            : approvedBlocked(r.state) ? L("لا يمكن حذف قرار معتمد (مثبت)", "Cannot delete an approved decision") : ""}
                           onClick={() => { setOk(null); setConfirm({ kind: "normal", row: r }); }}>
                           {L("حذف", "Delete")}
                         </button>
@@ -99,7 +104,9 @@ export function DeletionOperationsPage() {
                       <td>{r.originalCopyNumber ?? "—"}</td>
                       <td><StateBadge state={r.state} /></td>
                       <td>
-                        <button className="btn btn--danger" onClick={() => { setOk(null); setConfirm({ kind: "misc", row: r }); }}>
+                        <button className="btn btn--danger" disabled={approvedBlocked(r.state)}
+                          title={approvedBlocked(r.state) ? L("لا يمكن حذف قرار معتمد (مثبت)", "Cannot delete an approved decision") : ""}
+                          onClick={() => { setOk(null); setConfirm({ kind: "misc", row: r }); }}>
                           {L("حذف", "Delete")}
                         </button>
                       </td>

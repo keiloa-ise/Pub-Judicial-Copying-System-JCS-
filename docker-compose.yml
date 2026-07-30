@@ -40,10 +40,13 @@ services:
       #   SHOW_APPROVED_IN_QUEUE (off)  → show Approved decisions in the Copyist's/Reviewer's «طلباتي» queue.
       #   ALLOW_COPYIST_REPRINT  (on)   → individual reprint for Copyist + Registry Head (off = Head only).
       #   ALLOW_HEAD_BATCH_PRINT (on)   → batch-print tab for Administrator + Registry Head (off = Admin only).
+      #   ALLOW_DELETE_APPROVED  (off)  → allow the Registry Head to delete a مثبت (Approved) decision in
+      #                                   the deletion window (off = approved decisions are protected).
       PRINT_DELEGATION_INFO: ${PRINT_DELEGATION_INFO:-false}
       SHOW_APPROVED_IN_QUEUE: ${SHOW_APPROVED_IN_QUEUE:-false}
       ALLOW_COPYIST_REPRINT: ${ALLOW_COPYIST_REPRINT:-true}
       ALLOW_HEAD_BATCH_PRINT: ${ALLOW_HEAD_BATCH_PRINT:-true}
+      ALLOW_DELETE_APPROVED: ${ALLOW_DELETE_APPROVED:-false}
     depends_on:
       mssql:
         condition: service_healthy
