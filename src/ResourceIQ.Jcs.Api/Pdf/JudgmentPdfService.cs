@@ -199,10 +199,15 @@ public sealed class JudgmentPdfService
             // Computed once — used both for the note on this page (before the signatures) and the
             // dissent appendix on the following page.
             var dissenters = new List<(string Name, string Title)>();
-            if (string.Equals(G("presidentDissenting"), "true", StringComparison.OrdinalIgnoreCase))
+            var presidentDissenting = string.Equals(G("presidentDissenting"), "true", StringComparison.OrdinalIgnoreCase);
+            if (presidentDissenting)
                 dissenters.Add((G("president"), G("presidentTitle")));
             foreach (var m in members)
                 if (m.Dissenting) dissenters.Add((m.Name, m.Title));
+
+            // The dissent reason is OPTIONAL: the appendix (and its "see appendix" note) is printed ONLY
+            // when the copyist actually wrote a reason. Otherwise the dissent is shown inline only.
+            var hasDissentReason = dissentSections.Any(s => !string.IsNullOrWhiteSpace(s.Title) || !string.IsNullOrWhiteSpace(s.Text));
 
             // Inserted sections, in order. Section text may carry inline bold/italic (rendered as
             // styled runs); the title is plain.
@@ -217,15 +222,15 @@ public sealed class JudgmentPdfService
             col.Item().PaddingTop(20).AlignCenter()
                 .Text($"قراراً صدر في {Dots(G("issueHijri"))} هـ الموافق لـ {Dots(G("issueGregorian"))} م").Bold();
 
-            // A dissent exists → flag it on the decision page itself, BEFORE the signatures, naming
-            // the dissenting judges. The full reasoning is in the الرأي المخالف appendix that follows.
-            if (dissenters.Count > 0)
-                col.Item().PaddingTop(10).Text(t =>
-                {
-                    t.Span("صدر هذا القرار مع وجود رأي مخالف. القضاة المخالفون: ").Bold();
-                    t.Span(string.Join("، ", dissenters.Select(x => Dash(x.Name))));
-                    t.Span(" (انظر ملحق الرأي المخالف).");
-                });
+            // // A dissent exists → flag it on the decision page itself, BEFORE the signatures, naming
+            // // the dissenting judges. The full reasoning is in the الرأي المخالف appendix that follows.
+            // if (dissenters.Count > 0)
+            //     col.Item().PaddingTop(10).Text(t =>
+            //     {
+            //         t.Span("صدر هذا القرار مع وجود رأي مخالف. القضاة المخالفون: ").Bold();
+            //         t.Span(string.Join("، ", dissenters.Select(x => Dash(x.Name))));
+            //         t.Span(" (انظر ملحق الرأي المخالف).");
+            //     });
 
             // Signatures — each over the title the copyist chose.
             col.Item().PaddingTop(40).Row(r =>
@@ -247,24 +252,45 @@ public sealed class JudgmentPdfService
                 f.RelativeItem().AlignLeft().Text(d.CopyNumber is { } cn ? $"رقم النسخة: {cn}" : $"رقم المتفرق: {d.MiscNumber}").FontSize(9).FontColor(Colors.Grey.Darken2);
             });
 
-            // ── Dissent appendix (الرأي المخالف) — printed on a NEW page whenever one or more judges
-            // dissent (dissenters computed above). Holds the reason (same paragraph style) and is
-            // signed by the dissenting judges ONLY; the reason text comes from DissentSectionsJson.
-            if (dissenters.Count > 0)
+            // ── Dissent appendix — printed on a NEW page ONLY when a dissent reason was written. It does
+            // NOT carry a "الرأي المخالف" heading: it opens EXACTLY like the decision's own ترويسة (the
+            // بسم الله banner; the repeating page header already shows the court + decision numbers), and
+            // is signed ONLY by the dissenting judge(s), each capacity followed by «المخالف».
+            if (dissenters.Count > 0 && hasDissentReason)
             {
                 col.Item().PageBreak();
-                col.Item().PaddingBottom(6).AlignCenter().Text("الرأي المخالف").Bold().FontSize(15);
+
+                // Same opening banner as the decision's ترويسة.
+                col.Item().AlignCenter().Text(t =>
+                {
+                    t.Line("بسم الله الرّحمن الرّحيم").Bold();
+                    t.Line("باسم الشعب العربي في سورية").Bold();
+                });
+
+                // NOTE: the الهيئة الحاكمة + panel members are intentionally NOT reprinted on the appendix.
+                // Kept here (commented out, NOT deleted) in case the layout needs them back later:
+                // col.Item().Text(t => { t.Span("الهيئة الحاكمة: ").Bold(); t.Span(Dash(G("chamber"))); t.Span(" — المؤلفة من السادة القضاة:"); });
+                // col.Item().PaddingHorizontal(20).Column(p =>
+                // {
+                //     var pRole = string.IsNullOrWhiteSpace(G("presidentTitle")) ? "رئيساً" : G("presidentTitle");
+                //     p.Item().Element(e => PanelRow(e, Dash(G("president")), pRole));
+                //     foreach (var m in members)
+                //         p.Item().Element(e => PanelRow(e, m.Name, string.IsNullOrWhiteSpace(m.Title) ? "مستشاراً" : m.Title));
+                // });
+
                 foreach (var s in dissentSections)
                     col.Item().Column(sec =>
                     {
                         if (!string.IsNullOrWhiteSpace(s.Title)) sec.Item().Text($"{s.Title}:").Bold();
                         sec.Item().PaddingTop(4).Text(t => RenderRich(t, s.Text, 1.9f));
                     });
-                // Signatures of the dissenting judges (each over the title chosen for them).
+
+                // Signed ONLY by the dissenting judge(s) — capacity followed by «المخالف».
                 col.Item().PaddingTop(40).Row(r =>
                 {
                     foreach (var dj in dissenters)
-                        r.RelativeItem().Element(e => Signature(e, string.IsNullOrWhiteSpace(dj.Title) ? "القاضي المخالف" : dj.Title, dj.Name));
+                        r.RelativeItem().Element(e => Signature(e,
+                            DissentTitle(string.IsNullOrWhiteSpace(dj.Title) ? "القاضي" : dj.Title, true), dj.Name));
                 });
             }
 
@@ -485,6 +511,8 @@ public sealed class JudgmentPdfService
 
     private static string Dash(string s) => string.IsNullOrWhiteSpace(s) ? "—" : s;
     private static string Dots(string s) => string.IsNullOrWhiteSpace(s) ? "……" : s;
+    /// <summary>A dissenting judge's formal capacity followed by the word "المخالف" (e.g. «عضو المخالف»).</summary>
+    private static string DissentTitle(string title, bool dissenting) => dissenting ? $"{title} المخالف" : title;
 
     // Compact هجري/ميلادي pairing for the QR payload — mirrors the "قراراً صدر في ..." line on the
     // page itself, minus the sentence framing.

@@ -405,6 +405,47 @@ public class WorkflowServiceTests
             svc.DeleteAsync(new DeleteCopyRequestCommand(req.Id), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Cannot_delete_approved_decision_by_default() // ALLOW_DELETE_APPROVED off
+    {
+        Environment.SetEnvironmentVariable("ALLOW_DELETE_APPROVED", null);
+        var court = Guid.NewGuid();
+        var req = SeedApproved(court);
+        var head = new FakeCurrentUser { Role = Role.RegistryHead };
+        head.Courts.Add(court);
+        var svc = MakeDelete(head);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            svc.DeleteAsync(new DeleteCopyRequestCommand(req.Id), CancellationToken.None));
+        Assert.True(_repo.Contains(req.Id)); // still there
+    }
+
+    [Fact]
+    public async Task Can_delete_approved_decision_when_flag_enabled() // ALLOW_DELETE_APPROVED=true
+    {
+        Environment.SetEnvironmentVariable("ALLOW_DELETE_APPROVED", "true");
+        try
+        {
+            var court = Guid.NewGuid();
+            // Approved عادي that IS the latest number in its scope (seq 5 == copyLast 5).
+            var r = CopyRequest.Create(court, Guid.NewGuid(), null, "case-1", new DateOnly(2026, 6, 1),
+                CaseCategory.Normal, CaseUrgency.Normal, null, null, null, Guid.NewGuid(), Now);
+            r.AssignNumber("2/2026/0005");
+            var cp = Guid.NewGuid();
+            r.AssignToCopyist(cp, Now); r.AcceptByCopyist(cp, Now); r.SubmitForReview(Now); r.Approve(Guid.NewGuid(), Now);
+            _repo.Seed(r);
+            var head = new FakeCurrentUser { Role = Role.RegistryHead };
+            head.Courts.Add(court);
+            var svc = MakeDelete(head, copyLast: 5);
+
+            await svc.DeleteAsync(new DeleteCopyRequestCommand(r.Id), CancellationToken.None);
+
+            Assert.False(_repo.Contains(r.Id)); // deleted
+            Assert.Contains(AuditAction.Delete, _audit.Actions);
+        }
+        finally { Environment.SetEnvironmentVariable("ALLOW_DELETE_APPROVED", null); }
+    }
+
     private CopyRequest SeedUnderReview(Guid court, CaseUrgency urgency = CaseUrgency.Normal)
     {
         var expediteRequestNumber = urgency == CaseUrgency.Expedited ? "EXP-1" : null;

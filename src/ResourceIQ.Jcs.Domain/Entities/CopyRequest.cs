@@ -80,6 +80,12 @@ public class CopyRequest
     public DateTimeOffset? PrintedUtc { get; private set; }
     public Guid? PrintedById { get; private set; }
 
+    /// <summary>When the Reviewer returned this copy to the Copyist for correction (7B). Set on
+    /// <see cref="ReturnForCorrection"/>, cleared on <see cref="SubmitForReview"/> — so while the copy
+    /// sits back in the Copyist's queue it is flagged as «معاد للتصحيح» in the work list. Null for a
+    /// fresh (never-returned) copy.</summary>
+    public DateTimeOffset? ReturnedForCorrectionUtc { get; private set; }
+
     public CopyContent? Content { get; private set; }
 
     /// <summary>Work-queue priority as a stored, indexable rank (0 = موقوف, 1 = مستعجل, 2 = عادي) so the
@@ -286,6 +292,7 @@ public class CopyRequest
         EnsureAccepted(); // FR-07: cannot submit a copy the Copyist hasn't accepted.
         CopyStateMachine.EnsureTransition(State, CopyState.UnderReview);
         State = CopyState.UnderReview;
+        ReturnedForCorrectionUtc = null; // leaving the Copyist's queue — clear the «معاد للتصحيح» marker
         UpdatedUtc = nowUtc;
     }
 
@@ -322,6 +329,7 @@ public class CopyRequest
     {
         CopyStateMachine.EnsureTransition(State, CopyState.InPreparation);
         State = CopyState.InPreparation;
+        ReturnedForCorrectionUtc = nowUtc; // flag it «معاد للتصحيح» in the Copyist's work list
         UpdatedUtc = nowUtc;
     }
 

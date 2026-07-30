@@ -23,7 +23,10 @@ public sealed record CopyRequestListItem(
     Guid? AssignedCopyistId,
     string? AssignedCopyistName,
     DateTimeOffset CreatedUtc,
-    DateTimeOffset? AcceptedUtc);
+    DateTimeOffset? AcceptedUtc,
+    /// <summary>Set when the copy was returned to the Copyist for correction and is still awaiting it —
+    /// drives the «معاد للتصحيح» marker in the work list. Null (default) for the queues that don't need it.</summary>
+    DateTimeOffset? ReturnedForCorrectionUtc = null);
 
 public sealed record CopyRequestDetail(
     Guid Id,

@@ -33,7 +33,7 @@ export type CaseUrgency = "Normal" | "Suspended" | "Expedited";
 
 export interface LoginResult { token: string; userId: string; displayName: string; role: Role; }
 /** FR-15 feature flags (both default true). Server enforces; the SPA uses these only to hide options. */
-export interface FeatureFlags { allowCopyistReprint: boolean; allowHeadBatchPrint: boolean; }
+export interface FeatureFlags { allowCopyistReprint: boolean; allowHeadBatchPrint: boolean; allowDeleteApproved: boolean; }
 /** JC-32: a recoverable form draft returned by the server. */
 export interface FormDraft<TPayload = unknown> {
   formKey: string; role: string; copyRequestId: string | null; payload: TPayload; updatedAt: string;
@@ -47,6 +47,8 @@ export interface CopyRequestListItem {
   expediteRequestNumber: string | null; miscNumber: number | null;
   assignedCopyistId: string | null; assignedCopyistName: string | null;
   createdUtc: string; acceptedUtc: string | null;
+  /** Set when the copy was returned to the copyist for correction and is still awaiting it. */
+  returnedForCorrectionUtc?: string | null;
 }
 export interface LinkedMisc { id: string; miscNumber: number | null; referenceNumber: string | null; state: CopyState; reservationDate: string; }
 export interface CopyRequestDetail extends CopyRequestListItem {

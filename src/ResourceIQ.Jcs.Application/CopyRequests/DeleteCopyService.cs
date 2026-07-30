@@ -26,6 +26,11 @@ public sealed class DeleteCopyService(
     IAuditWriter audit,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>Feature flag: allow deleting an APPROVED (مثبت) decision from the deletion window.
+    /// Default FALSE — approved decisions are protected; set ALLOW_DELETE_APPROVED=true to permit it.</summary>
+    private static bool AllowDeleteApproved =>
+        string.Equals(Environment.GetEnvironmentVariable("ALLOW_DELETE_APPROVED"), "true", StringComparison.OrdinalIgnoreCase);
+
     public async Task DeleteAsync(DeleteCopyRequestCommand cmd, CancellationToken ct)
     {
         Guard.RequireRole(currentUser, Role.RegistryHead); // FR-16
@@ -34,6 +39,10 @@ public sealed class DeleteCopyService(
                       ?? throw new NotFoundException("Copy request not found.");
 
         Guard.RequireCopyScope(currentUser, request.CourtId, request.RoomId); // BR-06 — within the head's courts
+
+        // A مثبت (Approved) decision may only be deleted when ALLOW_DELETE_APPROVED is on (default off).
+        if (request.State == CopyState.Approved && !AllowDeleteApproved)
+            throw new DomainException("لا يمكن حذف قرار معتمد (مثبت).");
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {

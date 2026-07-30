@@ -168,15 +168,20 @@ export function RequestsListPage() {
               const unaccepted = r.state === "InPreparation" && !r.acceptedUtc;
               const acceptable = isCopyist && r.id === acceptableId;
               const locked = isCopyist && unaccepted && r.id !== acceptableId;
-              const cls = [r.acceptedUtc ? "row-accepted" : "", acceptable ? "row-acceptable" : "", locked ? "row-locked" : ""]
+              // 7B: returned by the reviewer for correction and still awaiting it (state InPreparation).
+              const returned = !!r.returnedForCorrectionUtc && r.state === "InPreparation";
+              const cls = [r.acceptedUtc ? "row-accepted" : "", acceptable ? "row-acceptable" : "", locked ? "row-locked" : "", returned ? "row-returned" : ""]
                 .filter(Boolean).join(" ") || undefined;
               return (
                 <tr key={r.id} className={cls}
                   onClick={() => { if (!locked) navigate("request", r.id); }}
                   title={locked ? L("لا يمكن فتح هذا الطلب قبل قبول الطلبات الأعلى أولوية", "Cannot open until higher-priority requests are accepted")
+                    : returned ? L("قرار معاد للتصحيح من المدقق", "Returned for correction by the reviewer")
                     : acceptable ? L("متاح للقبول", "Available to accept")
                     : r.acceptedUtc ? L("مقبول من الناسخ", "Accepted by the copyist") : undefined}>
-                  <td><strong>{r.copyNumber ?? "—"}</strong></td>
+                  <td><strong>{r.copyNumber ?? "—"}</strong>
+                    {returned && <span className="pill--returned" title={L("معاد للتصحيح", "Returned for correction")}>↩ {L("معاد للتصحيح", "Returned")}</span>}
+                  </td>
                   <td>{r.courtName}</td>
                   <td>{r.roomName}</td>
                   <td>{r.caseBaseNumber}</td>
