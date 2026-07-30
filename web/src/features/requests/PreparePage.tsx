@@ -341,29 +341,31 @@ export function PreparePage({ id }: { id: string }) {
       // A reply is meaningful only when a dissent exists and a non-dissenting judge authors it.
       const hasReply = hasDissent && (presidentReplies || cleanMembers.some((m) => !m.dissenting && !!m.replying));
       if (finalize) {
-        if (presidentKey && !values[presidentKey]) throw new Error(L("يجب اختيار رئيس الهيئة.", "Select the panel president."));
+        const validationErrors: string[] = [];
+        if (presidentKey && !values[presidentKey]) validationErrors.push(L("يجب اختيار رئيس الهيئة.", "Select the panel president."));
         if (presidentKey && values[presidentKey] && !values[PRESIDENT_TITLE_KEY])
-          throw new Error(L("يجب اختيار صفة رئيس الهيئة.", "Select the president's title."));
+          validationErrors.push(L("يجب اختيار صفة رئيس الهيئة.", "Select the president's title."));
         if (cleanMembers.some((m) => !m.title))
-          throw new Error(L("يجب اختيار صفة لكل عضو في الهيئة.", "Select a title for every panel member."));
-        // Only ONE رئيس هيئة across the whole panel (president slot + members).
-        const chairCountClean = ((values[PRESIDENT_TITLE_KEY] ?? "") === PRESIDENT_TITLE_NAME ? 1 : 0)
-          + cleanMembers.filter((m) => m.title === PRESIDENT_TITLE_NAME).length;
-        if (chairCountClean > 1)
-          throw new Error(L("لا يمكن تحديد أكثر من رئيس هيئة واحد.", "Only one panel president may be designated."));
+          validationErrors.push(L("يجب اختيار صفة لكل عضو في الهيئة.", "Select a title for every panel member."));
         // ندب: a delegated judge must carry both the delegation date and the delegation decision number.
         if (presidentDelegated && (!values[PRESIDENT_DELEGATION_DATE_KEY]?.trim() || !values[PRESIDENT_DELEGATION_NUMBER_KEY]?.trim()))
-          throw new Error(L("يجب إدخال تاريخ الندب ورقم قرار الندب لرئيس الهيئة المنتدب.",
+          validationErrors.push(L("يجب إدخال تاريخ الندب ورقم قرار الندب لرئيس الهيئة المنتدب.",
                             "Enter the delegation date and decision number for the delegated president."));
         if (cleanMembers.some((m) => m.delegated && (!m.delegationDate?.trim() || !m.delegationNumber?.trim())))
-          throw new Error(L("يجب إدخال تاريخ الندب ورقم قرار الندب لكل عضو منتدب.",
+          validationErrors.push(L("يجب إدخال تاريخ الندب ورقم قرار الندب لكل عضو منتدب.",
                             "Enter the delegation date and decision number for every delegated member."));
-        // مخالفة: the dissent reason is OPTIONAL. A judge may be marked dissenting without writing a
-        // reason; when no reason is entered the dissent appendix is simply not printed (see PDF).
+        // مخالفة: a dissent with no reason text is rejected (منع وإظهار خطأ).
+        if (hasDissent && !dissentSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
+          validationErrors.push(L("يجب كتابة سبب المخالفة في ملحق الرأي المخالف.",
+                            "Enter the dissent reason in the dissenting-opinion appendix."));
         // الرد على المخالفة: a reply with no text is rejected.
         if (hasReply && !rebuttalSections.some((s) => stripHtml(s.text).length > 0 || s.title.trim().length > 0))
-          throw new Error(L("يجب كتابة نص الرد في ملحق الرد على الرأي المخالف.",
+          validationErrors.push(L("يجب كتابة نص الرد في ملحق الرد على الرأي المخالف.",
                             "Enter the reply text in the reply-to-dissent appendix."));
+        if (validationErrors.length > 0) {
+          setErr(validationErrors.join("\n"));
+          return;
+        }
       }
       const fieldValues = { ...values };
       // When there is no dissent a reply is meaningless — strip any stale reply flags before saving.
@@ -419,7 +421,7 @@ export function PreparePage({ id }: { id: string }) {
         {reviewerCorrecting ? L("تصحيح النسخة", "Correct copy") : L("تحضير النسخة", "Prepare copy")} {detail.copyNumber}
       </h1>
 
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {ok && <div className="okbox">{ok}</div>}
       {lastReturn && (
         <div className="returnbanner">

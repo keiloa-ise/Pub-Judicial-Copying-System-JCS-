@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type Court, type Room, type AssignedUser, type NumberingPolicy, type CopyNumberingPolicy } from "../../api/client";
-import { useL, ErrorBox, Spinner, Modal, useSort, SortTh, numberingPolicyLabels, roleLabels } from "../../app/ui";
+import { useL, ErrorBox, Spinner, Modal, SearchableSelect, useSort, SortTh, numberingPolicyLabels, roleLabels } from "../../app/ui";
 import { useI18n } from "../../i18n";
 
 const LEVELS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)); // A..Z
@@ -46,6 +46,11 @@ export function CourtsPage() {
 
   const courtSort = useSort<Court>(courts ?? [], { code: (c) => c.code, name: (c) => c.name, status: (c) => c.isActive });
   const roomSort = useSort<Room>(rooms ?? [], { code: (r) => r.code, name: (r) => r.name, status: (r) => r.isActive });
+  const courtOptions = (courts ?? []).map((c) => ({
+    id: c.id,
+    label: `${c.name} (${c.code})`,
+    searchText: `${c.name} ${c.code}`,
+  }));
 
   const loadRooms = (courtId: string) => {
     if (!courtId) { setRooms(null); return; }
@@ -142,7 +147,7 @@ export function CourtsPage() {
   return (
     <>
       <h1 className="page-title">{L("المحاكم والغرف", "Courts & rooms")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={L("تعديل المحكمة", "Edit court")}>
         <form className="card" onSubmit={saveEdit}>
@@ -221,10 +226,14 @@ export function CourtsPage() {
         <h3>{L("إدارة الغرف", "Manage rooms")}</h3>
         <label className="field" style={{ maxWidth: 360 }}>
           <span>{L("المحكمة", "Court")}</span>
-          <select value={roomCourtId} onChange={(e) => setRoomCourtId(e.target.value)}>
-            <option value="">{L("اختر المحكمة لإدارة غرفها", "Select a court to manage its rooms")}</option>
-            {(courts ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-          </select>
+          <SearchableSelect
+            options={courtOptions}
+            value={roomCourtId}
+            onChange={setRoomCourtId}
+            placeholder={L("ابحث عن المحكمة لإدارة غرفها...", "Search a court to manage its rooms...")}
+            emptyLabel={L("لا توجد محاكم مطابقة.", "No matching courts.")}
+            clearLabel={L("مسح المحكمة", "Clear court")}
+          />
         </label>
 
         {roomCourtId && (

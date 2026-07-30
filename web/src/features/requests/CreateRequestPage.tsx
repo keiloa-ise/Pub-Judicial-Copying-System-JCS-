@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption, type LastNumber } from "../../api/client";
 import { useNav } from "../../app/nav";
-import { useL, ErrorBox, categoryLabels, urgencyLabels } from "../../app/ui";
+import { useL, ErrorBox, SearchableSelect, categoryLabels, urgencyLabels } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { useAutoSaveDraft } from "../../hooks/useAutoSaveDraft";
 import { useI18n } from "../../i18n";
@@ -44,6 +44,21 @@ export function CreateRequestPage() {
   const searchSeq = useRef(0);
 
   const isMisc = category === "Miscellaneous";
+  const courtOptions = courts.map((c) => ({
+    id: c.id,
+    label: c.name,
+    searchText: `${c.name} ${c.code}`,
+  }));
+  const roomOptions = rooms.map((r) => ({
+    id: r.id,
+    label: `${r.name} (${r.code})`,
+    searchText: `${r.name} ${r.code}`,
+  }));
+  const copyistOptions = copyists.map((c) => ({
+    id: c.id,
+    label: c.name,
+    searchText: c.name,
+  }));
 
   useEffect(() => {
     api.lookupCourts().then(setCourts).catch((e) => setErr(e.message));
@@ -126,9 +141,21 @@ export function CreateRequestPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setErr(null); setBusy(true);
+    setErr(null);
+    const validationErrors: string[] = [];
+    if (!courtId) validationErrors.push(L("يجب اختيار المحكمة.", "Select the court."));
+    if (!roomId) validationErrors.push(L("يجب اختيار الغرفة.", "Select the room."));
+    if (!copyistId) validationErrors.push(L("يجب اختيار الناسخ المكلّف.", "Select the assigned copyist."));
+    if (isMisc && !originalId) validationErrors.push(L("يجب اختيار النسخة الأصلية (قرار معتمد).", "Select the original (Approved) copy."));
+    if (!isMisc && !caseBase.trim()) validationErrors.push(L("يجب إدخال رقم الأساس.", "Enter the case base number."));
+    if (urgency === "Expedited" && !expediteNo.trim()) validationErrors.push(L("يجب إدخال رقم طلب الاستعجال.", "Enter the expedite request number."));
+    if (validationErrors.length > 0) {
+      setErr(validationErrors.join("\n"));
+      return;
+    }
+
+    setBusy(true);
     try {
-      if (isMisc && !originalId) throw new Error(L("يجب اختيار النسخة الأصلية (قرار معتمد).", "Select the original (Approved) copy."));
       const res = await api.createRequest({
         courtId,                                           // متفرق: server re-derives court from the original
         roomId: isMisc ? EMPTY_GUID : roomId,              // متفرق: server uses the original's room
@@ -155,8 +182,8 @@ export function CreateRequestPage() {
           : L("يُصدر النظام رقم النسخة تلقائيًا.", "The system issues the copy number automatically.")}
       </p>
 
-      <form className="card" style={{ maxWidth: 720 }} onSubmit={submit}>
-        {err && <ErrorBox message={err} />}
+      <form className="card" style={{ maxWidth: 720 }} onSubmit={submit} noValidate>
+        {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
         {/* Category first — it drives the rest of the form */}
         <div className="row">
@@ -173,17 +200,26 @@ export function CreateRequestPage() {
         <div className="row">
           <label className="field">
             <span>{L("المحكمة", "Court")}</span>
-            <select value={courtId} onChange={(e) => pickCourt(e.target.value)} required>
-              <option value="" disabled>{L("اختر المحكمة", "Select court")}</option>
-              {courts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SearchableSelect
+              options={courtOptions}
+              value={courtId}
+              onChange={pickCourt}
+              placeholder={L("ابحث عن المحكمة...", "Search courts...")}
+              emptyLabel={L("لا توجد محاكم مطابقة.", "No matching courts.")}
+              clearLabel={L("مسح المحكمة", "Clear court")}
+            />
           </label>
           <label className="field">
             <span>{L("الغرفة", "Room")}</span>
-            <select value={roomId} onChange={(e) => pickRoom(e.target.value)} required disabled={!courtId}>
-              <option value="" disabled>{L("اختر الغرفة", "Select room")}</option>
-              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}
-            </select>
+            <SearchableSelect
+              options={roomOptions}
+              value={roomId}
+              onChange={pickRoom}
+              placeholder={courtId ? L("ابحث عن الغرفة...", "Search rooms...") : L("اختر المحكمة أولاً", "Select court first")}
+              emptyLabel={L("لا توجد غرف مطابقة.", "No matching rooms.")}
+              disabled={!courtId}
+              clearLabel={L("مسح الغرفة", "Clear room")}
+            />
           </label>
         </div>
 
@@ -232,10 +268,15 @@ export function CreateRequestPage() {
         <div className="row">
           <label className="field">
             <span>{L("الناسخ المكلَّف", "Assigned copyist")}</span>
-            <select value={copyistId} onChange={(e) => setCopyistId(e.target.value)} required disabled={!roomId}>
-              <option value="" disabled>{L("اختر الناسخ", "Select copyist")}</option>
-              {copyists.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SearchableSelect
+              options={copyistOptions}
+              value={copyistId}
+              onChange={setCopyistId}
+              placeholder={roomId ? L("ابحث عن الناسخ...", "Search copyists...") : L("اختر الغرفة أولاً", "Select room first")}
+              emptyLabel={L("لا يوجد ناسخون مطابقون.", "No matching copyists.")}
+              disabled={!roomId}
+              clearLabel={L("مسح الناسخ", "Clear copyist")}
+            />
           </label>
           {!isMisc && (
             <label className="field">

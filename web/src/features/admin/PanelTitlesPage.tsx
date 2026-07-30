@@ -56,7 +56,7 @@ export function PanelTitlesPage() {
   return (
     <>
       <h1 className="page-title">{L("صفات أعضاء الهيئة", "Panel member titles")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={L("تعديل الصفة", "Edit title")}>
         <form className="card" onSubmit={saveEdit}>

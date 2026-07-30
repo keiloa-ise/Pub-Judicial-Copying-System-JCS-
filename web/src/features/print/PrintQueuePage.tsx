@@ -78,7 +78,7 @@ export function PrintQueuePage({ mode }: { mode: "reviewer" | "copyist" }) {
     <>
       <h1 className="page-title">{title}</h1>
       <p className="page-sub">{hint}</p>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {ok && <div className="okbox">{ok}</div>}
       {!rows ? <Spinner label={L("جارٍ التحميل…", "Loading…")} /> : (
         <>
