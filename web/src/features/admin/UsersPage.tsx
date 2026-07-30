@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type UserDto, type Court, type Room, type Role } from "../../api/client";
-import { useL, ErrorBox, Spinner, roleLabels, Modal, useSort, SortTh } from "../../app/ui";
+import { useL, ErrorBox, Spinner, roleLabels, Modal, SearchableMultiSelect, useSort, SortTh } from "../../app/ui";
 import { useI18n } from "../../i18n";
 
 const roles: Role[] = ["Administrator", "RegistryHead", "Copyist", "Reviewer"];
@@ -55,10 +55,20 @@ export function UsersPage() {
     scope: (u) => scopeText(u),
     status: (u) => u.isActive,
   });
-
-  function toggleIn(list: string[], id: string, on: boolean) {
-    return on ? [...list, id] : list.filter((x) => x !== id);
-  }
+  const courtOptions = courts.map((c) => ({
+    id: c.id,
+    label: c.name,
+    searchText: `${c.name} ${c.code}`,
+  }));
+  const roomOptions = rooms.map((r) => {
+    const court = courts.find((c) => c.id === r.courtId);
+    return {
+      id: r.id,
+      label: `${r.name} (${r.code})`,
+      group: court?.name,
+      searchText: `${r.name} ${r.code} ${court?.name ?? ""} ${court?.code ?? ""}`,
+    };
+  });
 
   async function run(label: string, fn: () => Promise<unknown>) {
     setErr(null); setOk(null); setBusy(true);
@@ -102,39 +112,28 @@ export function UsersPage() {
     if (pwd.trim()) run(L("تم تعيين كلمة المرور.", "Password reset."), () => api.admin.resetPassword(u.id, pwd));
   }
 
-  /** Court checkboxes (Registry Head scope). */
-  const CourtPicker = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string, on: boolean) => void }) => (
-    <div className="chips">
-      {courts.map((c) => (
-        <label key={c.id} className="chip">
-          <input type="checkbox" checked={selected.includes(c.id)} onChange={(e) => onToggle(c.id, e.target.checked)} />
-          {c.name}
-        </label>
-      ))}
-    </div>
+  /** Searchable court picker (Registry Head scope). */
+  const CourtPicker = ({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) => (
+    <SearchableMultiSelect
+      options={courtOptions}
+      selected={selected}
+      onChange={onChange}
+      placeholder={L("ابحث عن محكمة...", "Search courts...")}
+      emptyLabel={L("لا توجد محاكم مطابقة.", "No matching courts.")}
+      selectedLabel={L("المحاكم المختارة", "Selected courts")}
+    />
   );
 
-  /** Room checkboxes grouped by court (Copyist/Reviewer scope — may span courts). */
-  const RoomPicker = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string, on: boolean) => void }) => (
-    <div className="scope-rooms">
-      {courts.map((c) => {
-        const courtRooms = rooms.filter((r) => r.courtId === c.id);
-        if (courtRooms.length === 0) return null;
-        return (
-          <div key={c.id} style={{ marginBottom: 8 }}>
-            <div className="muted" style={{ fontWeight: 600 }}>{c.name}</div>
-            <div className="chips">
-              {courtRooms.map((r) => (
-                <label key={r.id} className="chip">
-                  <input type="checkbox" checked={selected.includes(r.id)} onChange={(e) => onToggle(r.id, e.target.checked)} />
-                  {r.name}
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+  /** Searchable room picker (Copyist/Reviewer scope; may span courts). */
+  const RoomPicker = ({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) => (
+    <SearchableMultiSelect
+      options={roomOptions}
+      selected={selected}
+      onChange={onChange}
+      placeholder={L("ابحث باسم الغرفة أو رمزها أو المحكمة...", "Search by room, code, or court...")}
+      emptyLabel={L("لا توجد غرف مطابقة.", "No matching rooms.")}
+      selectedLabel={L("الغرف المختارة", "Selected rooms")}
+    />
   );
 
   const scopeLabel = (r: Role) =>
@@ -145,7 +144,7 @@ export function UsersPage() {
   return (
     <>
       <h1 className="page-title">{L("المستخدمون", "Users")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {ok && <div className="okbox">{ok}</div>}
 
       {/* Edit panel */}
@@ -162,10 +161,10 @@ export function UsersPage() {
           </div>
           {isRoomScoped(edRole) ? (
             <label className="field"><span>{scopeLabel(edRole)}</span>
-              <RoomPicker selected={edRooms} onToggle={(id, on) => setEdRooms((ids) => toggleIn(ids, id, on))} /></label>
+              <RoomPicker selected={edRooms} onChange={setEdRooms} /></label>
           ) : isCourtScoped(edRole) ? (
             <label className="field"><span>{scopeLabel(edRole)}</span>
-              <CourtPicker selected={edCourts} onToggle={(id, on) => setEdCourts((ids) => toggleIn(ids, id, on))} /></label>
+              <CourtPicker selected={edCourts} onChange={setEdCourts} /></label>
           ) : (
             <p className="muted">{L("المدير يصل إلى كل المحاكم والغرف.", "Administrators access all courts and rooms.")}</p>
           )}
@@ -195,10 +194,10 @@ export function UsersPage() {
         </div>
         {isRoomScoped(role) ? (
           <label className="field"><span>{scopeLabel(role)}</span>
-            <RoomPicker selected={roomIds} onToggle={(id, on) => setRoomIds((ids) => toggleIn(ids, id, on))} /></label>
+            <RoomPicker selected={roomIds} onChange={setRoomIds} /></label>
         ) : isCourtScoped(role) ? (
           <label className="field"><span>{scopeLabel(role)}</span>
-            <CourtPicker selected={courtIds} onToggle={(id, on) => setCourtIds((ids) => toggleIn(ids, id, on))} /></label>
+            <CourtPicker selected={courtIds} onChange={setCourtIds} /></label>
         ) : (
           <p className="muted">{L("المدير يصل إلى كل المحاكم والغرف.", "Administrators access all courts and rooms.")}</p>
         )}

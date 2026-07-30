@@ -88,7 +88,7 @@ export function RequestDetailPage({ id }: { id: string }) {
       </div>
 
       <h1 className="page-title">{L("النسخة رقم", "Copy")} {detail.copyNumber ?? "—"}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       {detail.state === "InPreparation" && lastReturn && (
         <div className="returnbanner">

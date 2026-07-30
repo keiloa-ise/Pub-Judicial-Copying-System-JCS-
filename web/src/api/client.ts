@@ -9,6 +9,71 @@ const BASE = import.meta.env.VITE_API_BASE ?? "";
 let token: string | null = null;
 export function setToken(t: string | null) { token = t; }
 
+export class ApiError extends Error {
+  status: number;
+  messages: string[];
+
+  constructor(status: number, messages: string[]) {
+    super(messages.join("\n"));
+    this.name = "ApiError";
+    this.status = status;
+    this.messages = messages;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function pushMessage(target: string[], value: unknown) {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (trimmed && !target.includes(trimmed)) target.push(trimmed);
+}
+
+function collectValidationMessages(errors: unknown): string[] {
+  const messages: string[] = [];
+  if (Array.isArray(errors)) {
+    errors.forEach((x) => pushMessage(messages, x));
+    return messages;
+  }
+  if (!isRecord(errors)) return messages;
+
+  for (const value of Object.values(errors)) {
+    if (Array.isArray(value)) value.forEach((x) => pushMessage(messages, x));
+    else pushMessage(messages, value);
+  }
+  return messages;
+}
+
+function errorMessages(body: unknown, fallback: string): string[] {
+  const messages: string[] = [];
+  if (isRecord(body)) {
+    const validationMessages = collectValidationMessages(body.errors);
+    validationMessages.forEach((x) => pushMessage(messages, x));
+    if (validationMessages.length === 0) {
+      pushMessage(messages, body.error);
+      pushMessage(messages, body.detail);
+      pushMessage(messages, body.title);
+    }
+  } else {
+    pushMessage(messages, body);
+  }
+  if (messages.length === 0) pushMessage(messages, fallback);
+  return messages;
+}
+
+async function readErrorBody(res: Response): Promise<unknown> {
+  const text = await res.text().catch(() => "");
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return text; }
+}
+
+async function throwApiError(res: Response, fallback: string): Promise<never> {
+  const body = await readErrorBody(res);
+  throw new ApiError(res.status, errorMessages(body, fallback));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -18,10 +83,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error ?? `Request failed (${res.status})`);
-  }
+  if (!res.ok) await throwApiError(res, `Request failed (${res.status})`);
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
@@ -188,10 +250,7 @@ export const api = {
     const res = await fetch(
       `${BASE}/api/copy-requests/batch-print?courtId=${courtId}&roomId=${roomId}&from=${from}&to=${to}&approved=${approved}`,
       { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(body.error ?? `Request failed (${res.status})`);
-    }
+    if (!res.ok) await throwApiError(res, `Request failed (${res.status})`);
     return res.blob();
   },
   // FR-15: direct same-origin URL of the server-rendered judgment PDF. Loaded straight into an
@@ -204,10 +263,7 @@ export const api = {
     const res = await fetch(`${BASE}/api/copy-requests/${id}/print`, {
       method: "POST", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(body.error ?? `Request failed (${res.status})`);
-    }
+    if (!res.ok) await throwApiError(res, `Request failed (${res.status})`);
     return res.blob();
   },
   createRequest: (body: {
@@ -302,10 +358,7 @@ export const api = {
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ ids }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(body.error ?? `Request failed (${res.status})`);
-      }
+      if (!res.ok) await throwApiError(res, `Request failed (${res.status})`);
       return res.blob();
     },
   },
@@ -389,10 +442,7 @@ export async function downloadReport(type: ReportExportType, format: "csv" | "xl
   const res = await fetch(`${BASE}/api/reports/export?${p}`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error ?? `Export failed (${res.status})`);
-  }
+  if (!res.ok) await throwApiError(res, `Export failed (${res.status})`);
   const blob = await res.blob();
   const fallback = `${type}.${format}`;
   const fileName = parseFileName(res.headers.get("Content-Disposition")) ?? fallback;

@@ -143,7 +143,7 @@ export function RequestsListPage() {
         </form>
       )}
 
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {!items && !err && <Spinner label={L("جارٍ التحميل…", "Loading…")} />}
 
       {items && (

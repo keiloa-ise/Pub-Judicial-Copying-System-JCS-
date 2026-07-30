@@ -47,7 +47,7 @@ export function DeletionOperationsPage() {
            "Delete the latest عادي copy per court, or the last متفرق per numbering scope, within your courts. Numbering is rolled back (no gap); the audit trail is kept.")}
       </p>
 
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
       {ok && <div className="okbox">{ok}</div>}
 
       {!data ? <Spinner label={L("جارٍ التحميل…", "Loading…")} /> : (

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { CopyState, Role } from "../api/client";
 
@@ -66,8 +66,138 @@ export function Spinner({ label }: { label?: string }) {
   return <div className="muted" style={{ padding: 24 }}>{label ?? "…"}</div>;
 }
 
-export function ErrorBox({ message }: { message: string }) {
-  return <div className="errorbox" role="alert">{message}</div>;
+export function ErrorBox({ message, onDismiss }: { message: string | string[]; onDismiss?: () => void }) {
+  const messages = (Array.isArray(message) ? message : message.split(/\r?\n/))
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const noticeKey = messages.join("\n");
+  const [visible, setVisible] = useState(true);
+  const dismissRef = useRef(onDismiss);
+
+  useEffect(() => { dismissRef.current = onDismiss; }, [onDismiss]);
+
+  useEffect(() => {
+    if (!noticeKey) {
+      setVisible(false);
+      return;
+    }
+    setVisible(true);
+    const timer = window.setTimeout(() => {
+      setVisible(false);
+      dismissRef.current?.();
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [noticeKey]);
+
+  if (messages.length === 0 || !visible) return null;
+  if (messages.length === 1) return <div className="errorbox" role="alert">{messages[0]}</div>;
+
+  return (
+    <div className="errorbox-stack" aria-live="assertive">
+      {messages.map((item, i) => <div className="errorbox" role="alert" key={`${i}-${item}`}>{item}</div>)}
+    </div>
+  );
+}
+
+export interface SearchableSelectOption {
+  id: string;
+  label: string;
+  group?: string;
+  searchText?: string;
+}
+
+export function SearchableMultiSelect(
+  { options, selected, onChange, placeholder, emptyLabel, selectedLabel }:
+  Readonly<{
+    options: SearchableSelectOption[];
+    selected: string[];
+    onChange: (ids: string[]) => void;
+    placeholder: string;
+    emptyLabel: string;
+    selectedLabel: string;
+  }>,
+) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selectedSet = new Set(selected);
+  const selectedOptions = selected
+    .map((id) => options.find((o) => o.id === id))
+    .filter((o): o is SearchableSelectOption => !!o);
+  const q = query.trim().toLocaleLowerCase("ar");
+  const visibleOptions = options
+    .filter((o) => !selectedSet.has(o.id))
+    .filter((o) => !q || `${o.label} ${o.group ?? ""} ${o.searchText ?? ""}`.toLocaleLowerCase("ar").includes(q))
+    .slice(0, 80);
+
+  function add(id: string) {
+    if (!selectedSet.has(id)) onChange([...selected, id]);
+    setQuery("");
+    setOpen(true);
+  }
+
+  function remove(id: string) {
+    onChange(selected.filter((x) => x !== id));
+  }
+
+  function onInputKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      const first = visibleOptions[0];
+      if (first) {
+        e.preventDefault();
+        add(first.id);
+      }
+    } else if (e.key === "Backspace" && !query && selected.length > 0) {
+      remove(selected[selected.length - 1]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div className="searchselect">
+      <div className="searchselect__selected" aria-label={selectedLabel}>
+        {selectedOptions.length === 0 ? (
+          <span className="searchselect__placeholder">{selectedLabel}</span>
+        ) : selectedOptions.map((option) => (
+          <span className="searchselect__chip" key={option.id}>
+            <span>{option.group ? `${option.group} / ${option.label}` : option.label}</span>
+            <button type="button" onClick={() => remove(option.id)} aria-label={`Remove ${option.label}`}>x</button>
+          </span>
+        ))}
+      </div>
+      <div className="searchselect__control">
+        <input
+          className="searchselect__input"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+          onKeyDown={onInputKeyDown}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        {open && (
+          <div className="searchselect__menu" role="listbox">
+            {visibleOptions.length === 0 ? (
+              <div className="searchselect__empty">{emptyLabel}</div>
+            ) : visibleOptions.map((option) => (
+              <button
+                type="button"
+                className="searchselect__option"
+                key={option.id}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => add(option.id)}
+                role="option"
+              >
+                <span className="searchselect__option-main">{option.label}</span>
+                {option.group && <span className="searchselect__option-sub">{option.group}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ── Modal dialog ───────────────────────────────────────────────────────────
@@ -92,6 +222,111 @@ export function Modal(
           <button type="button" className="modal__close" onClick={onClose} aria-label="إغلاق">✕</button>
         </div>
         <div className="modal__body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function SearchableSelect(
+  { options, value, onChange, placeholder, emptyLabel, disabled = false, allowClear = true, clearLabel = "Clear" }:
+  Readonly<{
+    options: SearchableSelectOption[];
+    value: string;
+    onChange: (id: string) => void;
+    placeholder: string;
+    emptyLabel: string;
+    disabled?: boolean;
+    allowClear?: boolean;
+    clearLabel?: string;
+  }>,
+) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selectedOption = options.find((o) => o.id === value);
+  const q = query.trim().toLocaleLowerCase("ar");
+  const visibleOptions = options
+    .filter((o) => !q || `${o.label} ${o.group ?? ""} ${o.searchText ?? ""}`.toLocaleLowerCase("ar").includes(q))
+    .slice(0, 80);
+  const hasClear = allowClear && !!value && !disabled;
+
+  function pick(id: string) {
+    onChange(id);
+    setQuery("");
+    setOpen(false);
+  }
+
+  function clear() {
+    onChange("");
+    setQuery("");
+    setOpen(false);
+  }
+
+  function onInputKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
+    if (disabled) return;
+    if (e.key === "Enter") {
+      const first = visibleOptions[0];
+      if (first) {
+        e.preventDefault();
+        pick(first.id);
+      }
+    } else if (e.key === "Backspace" && !query && hasClear) {
+      clear();
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setQuery("");
+    }
+  }
+
+  return (
+    <div className={`searchselect searchselect--single${disabled ? " searchselect--disabled" : ""}`}>
+      <div className="searchselect__control">
+        <input
+          className={`searchselect__input${hasClear ? " searchselect__input--clearable" : ""}`}
+          value={open ? query : selectedOption?.label ?? ""}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={(e) => {
+            if (disabled) return;
+            setQuery(selectedOption?.label ?? "");
+            setOpen(true);
+            e.currentTarget.select();
+          }}
+          onBlur={() => window.setTimeout(() => { setOpen(false); setQuery(""); }, 120)}
+          onKeyDown={onInputKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          autoComplete="off"
+        />
+        {hasClear && (
+          <button
+            type="button"
+            className="searchselect__clear"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={clear}
+            aria-label={clearLabel}
+          >
+            x
+          </button>
+        )}
+        {open && !disabled && (
+          <div className="searchselect__menu" role="listbox">
+            {visibleOptions.length === 0 ? (
+              <div className="searchselect__empty">{emptyLabel}</div>
+            ) : visibleOptions.map((option) => (
+              <button
+                type="button"
+                className="searchselect__option"
+                key={option.id}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(option.id)}
+                role="option"
+                aria-selected={option.id === value}
+              >
+                <span className="searchselect__option-main">{option.label}</span>
+                {option.group && <span className="searchselect__option-sub">{option.group}</span>}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -61,7 +61,7 @@ export function ParagraphsPage() {
   return (
     <>
       <h1 className="page-title">{L("فقرات النصوص", "Paragraph templates")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={L("تعديل الفقرة", "Edit paragraph")}>
         <form className="card" onSubmit={saveEdit}>

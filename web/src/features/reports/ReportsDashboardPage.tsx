@@ -109,7 +109,7 @@ export function ReportsDashboardPage() {
   return (
     <>
       <h1 className="page-title">{L("التقارير", "Reports")}</h1>
-      {err && <ErrorBox message={err} />}
+      {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
 
       {/* ── Filters ── */}
       <form className="card filterbar" onSubmit={(e) => { e.preventDefault(); apply(); }}>
