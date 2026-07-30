@@ -124,6 +124,11 @@
 .kv dt { color: #6b756f; font-weight: 600; }
 .kv dd { margin: 0; }
 .bodybox { white-space: pre-wrap; line-height: 1.9; background: #fafbfa; border: 1px solid var(--gray-line); border-radius: 10px; padding: 16px; font-size: 15px; }
+/* Readable structured decision sections (SectionsJson) in the detail page. */
+.reading-section { margin-bottom: 14px; }
+.reading-section:last-child { margin-bottom: 0; }
+.reading-section__title { font-weight: 700; margin-bottom: 4px; }
+.reading-section__text { white-space: normal; line-height: 1.9; }
 
 .audit { list-style: none; padding: 0; margin: 0; }
 .audit li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--gray-line); font-size: 14px; }
