@@ -3,6 +3,7 @@ import { useI18n } from "../i18n";
 import { useNav } from "./nav";
 import { useL, roleLabels } from "./ui";
 import { Emblem } from "../components/Emblem";
+import { VersionBadge } from "../components/VersionBadge";
 import type { Role } from "../api/client";
 
 import { RequestsListPage } from "../features/requests/RequestsListPage";
@@ -106,6 +107,7 @@ export function AppLayout() {
           <span>{L("نظام ديوان النسخ القضائي", "Judicial Copying System")}</span>
         </div>
         <div className="appbar__spacer" />
+        <VersionBadge />
         <button className="linkbtn" onClick={toggle}>{L("English", "العربية")}</button>
         <div className="appbar__user">
           <strong>{user.displayName}</strong>

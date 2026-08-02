@@ -1,6 +1,7 @@
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth/AuthContext";
 import { Emblem } from "./Emblem";
+import { VersionBadge } from "./VersionBadge";
 
 /** Government header: emblem + ministry name, search, language toggle, login/logout, socials. */
 export function SiteHeader({ onLoginClick, onHomeClick }:
@@ -29,6 +30,8 @@ export function SiteHeader({ onLoginClick, onHomeClick }:
             <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
           </svg>
         </label>
+
+        <VersionBadge />
 
         <button className="lang" onClick={toggle} aria-label="Switch language">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

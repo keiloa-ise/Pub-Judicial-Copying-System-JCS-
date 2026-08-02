@@ -4,7 +4,8 @@ Digitizes the Ministry of Justice judicial decision copying workflow
 (Registry Head → Copyist → Reviewer → Administrator) with sequential copy numbering,
 approval locking, and a permanent append-only audit trail.
 
-See [PRD.md](PRD.md) (requirements) and [WORKFLOW.md](WORKFLOW.md) (state model).
+See [PRD.md](PRD.md) (requirements), [WORKFLOW.md](WORKFLOW.md) (state model),
+and [VERSIONING.md](VERSIONING.md) (readable UI versioning).
 
 ## Structure
 
