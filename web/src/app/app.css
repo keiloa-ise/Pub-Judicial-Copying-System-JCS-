@@ -7,6 +7,8 @@
 .appbar__spacer { flex: 1; }
 .appbar__user { display: flex; flex-direction: column; line-height: 1.25; text-align: start; }
 .appbar__user .muted { color: #bcd; font-size: 12.5px; }
+.appbar .version-badge { border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.1); color: #dfeee7; }
+.appbar .version-badge code { color: #fff; }
 .linkbtn { background: none; border: 0; color: #dfeee7; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; }
 .appbar .authbtn { border-color: rgba(255,255,255,.5); color: #fff; padding: 8px 16px; }
 .appbar .authbtn:hover { background: rgba(255,255,255,.15); }

@@ -94,6 +94,7 @@ export type CaseCategory = "Normal" | "Miscellaneous";
 export type CaseUrgency = "Normal" | "Suspended" | "Expedited";
 
 export interface LoginResult { token: string; userId: string; displayName: string; role: Role; }
+export interface AppVersion { version: string; commit: string | null; branch: string | null; deployedAt: string | null; commitDate: string | null; source: string; }
 /** FR-15 feature flags (both default true). Server enforces; the SPA uses these only to hide options. */
 export interface FeatureFlags { allowCopyistReprint: boolean; allowHeadBatchPrint: boolean; allowDeleteApproved: boolean; }
 /** JC-32: a recoverable form draft returned by the server. */
@@ -224,6 +225,9 @@ function reportParams(f: ReportFilter): URLSearchParams {
 }
 
 export const api = {
+  // Runtime version displayed in the UI to confirm which commit is running.
+  version: () => request<AppVersion>("/api/version"),
+
   // ── Auth ──
   login: (username: string, password: string) =>
     request<LoginResult>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
