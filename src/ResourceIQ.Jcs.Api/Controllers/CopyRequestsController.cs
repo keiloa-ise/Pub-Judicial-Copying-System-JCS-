@@ -144,7 +144,7 @@ public sealed class CopyRequestsController(
         var req = await createService.HandleAsync(new CreateCopyRequestCommand(
             body.CourtId, body.RoomId, body.CaseFilingDate, body.CaseBaseNumber,
             body.Category, body.Urgency, body.ExpediteRequestNumber, body.ReferenceNumber, body.AssignedCopyistId,
-            body.OriginalCopyId, body.Year, body.IssueHijri, body.IssueGregorian), ct);
+            body.OriginalCopyId, body.Year, body.IssueHijri, body.IssueGregorian, body.FirstBaseNumber), ct);
         return CreatedAtAction(nameof(Create), new { id = req.Id }, new { req.Id, req.CopyNumber, state = req.State.ToString() });
     }
 
@@ -164,8 +164,9 @@ public sealed class CopyRequestsController(
     /// number) — رقم النسخة for عادي, رقم المتفرق for متفرق. Shown as the Registry Head builds a request.</summary>
     [HttpGet("last-number")]
     public async Task<IActionResult> LastNumber(
-        [FromQuery] Guid courtId, [FromQuery] Guid roomId, [FromQuery] CaseCategory category, CancellationToken ct) =>
-        Ok(await readService.GetLastIssuedNumberAsync(courtId, roomId, category, ct));
+        [FromQuery] Guid courtId, [FromQuery] Guid roomId, [FromQuery] CaseCategory category,
+        [FromQuery] int year, CancellationToken ct) =>
+        Ok(await readService.GetLastIssuedNumberAsync(courtId, roomId, category, year, ct));
 
     /// <summary>FR-16: Registry Head deletes the latest copy in a court regardless of type (hard
     /// delete; رقم النسخة — and رقم المتفرق if متفرق — rolled back so no gap; audit kept).</summary>

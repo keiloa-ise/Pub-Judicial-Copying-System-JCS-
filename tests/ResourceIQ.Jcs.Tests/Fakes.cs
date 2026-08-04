@@ -30,9 +30,11 @@ internal sealed class FakeAllocator(string number = "00000001") : ICopyNumberAll
     public int Calls { get; private set; }
     public int Releases { get; private set; }
     public int? Last { get; set; } // value PeekLastAsync returns (for delete guards)
-    public Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct)
+    public int? LastYear { get; private set; } // the year Allocate was last called with
+    public Task<string> AllocateAsync(Guid courtId, Guid roomId, int year, CancellationToken ct)
     {
         Calls++;
+        LastYear = year;
         return Task.FromResult(number);
     }
     public Task ReleaseAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) { Releases++; return Task.CompletedTask; }
@@ -99,9 +101,14 @@ internal sealed class FakeCopyRequestRepository : ICopyRequestRepository
             .OrderBy(x => x.Urgency).ThenBy(x => x.CreatedUtc)
             .Select(x => new RankedCopyRef(x.CopyNumber, x.MiscNumber)).ToList());
     public Task<bool> AnyUnprintedRankedBeforeAsync(IReadOnlyCollection<Guid> courtIds, bool isApproved, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
-        Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && x.PrintedUtc == null
-            && (x.State == CopyState.Approved) == isApproved
-            && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc))));
+        Task.FromResult(_store.Values.Any(x => courtIds.Contains(x.CourtId) && UnprintedRankedBefore(x, isApproved, urgency, createdUtc)));
+    public Task<bool> AnyUnprintedRankedBeforeInRoomsAsync(IReadOnlyCollection<Guid> roomIds, bool isApproved, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        Task.FromResult(_store.Values.Any(x => roomIds.Contains(x.RoomId) && UnprintedRankedBefore(x, isApproved, urgency, createdUtc)));
+    public Task<bool> AnyUnprintedRankedBeforeForCopyistAsync(Guid copyistId, bool isApproved, CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        Task.FromResult(_store.Values.Any(x => x.AssignedCopyistId == copyistId && UnprintedRankedBefore(x, isApproved, urgency, createdUtc)));
+    private static bool UnprintedRankedBefore(CopyRequest x, bool isApproved, CaseUrgency urgency, DateTimeOffset createdUtc) =>
+        x.PrintedUtc == null && (x.State == CopyState.Approved) == isApproved
+        && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc));
     public void Remove(CopyRequest request) => _store.Remove(request.Id);
     public bool Contains(Guid id) => _store.ContainsKey(id);
 }

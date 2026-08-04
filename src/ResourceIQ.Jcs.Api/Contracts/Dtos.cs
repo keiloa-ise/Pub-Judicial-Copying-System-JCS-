@@ -15,7 +15,8 @@ public sealed record CreateCopyRequestRequest(
     Guid CourtId, Guid RoomId, DateOnly? CaseFilingDate, string CaseBaseNumber,
     CaseCategory Category, CaseUrgency Urgency, string? ExpediteRequestNumber, string? ReferenceNumber,
     Guid AssignedCopyistId, Guid? OriginalCopyId,
-    string? Year = null, string? IssueHijri = null, string? IssueGregorian = null);
+    string? Year = null, string? IssueHijri = null, string? IssueGregorian = null,
+    string? FirstBaseNumber = null);
 
 // FR-06: escalate a non-approved copy to مستعجل (Registry Head) — expedite number required.
 public sealed record ExpediteRequest(string ExpediteRequestNumber);

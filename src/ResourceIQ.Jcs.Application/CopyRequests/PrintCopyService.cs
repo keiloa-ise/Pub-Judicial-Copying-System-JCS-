@@ -43,12 +43,25 @@ public sealed class PrintCopyService(
 
         var isApproved = request.State == CopyState.Approved;
 
-        // R1: the FIRST print of a copy must follow the queue order. Once printed, a copy — approved or
-        // draft — may be viewed and re-printed at any time (it has already left the print-order queue).
+        // R1: the FIRST print of a copy must follow the queue order — scoped to match the caller's print
+        // queue: Reviewer → their rooms; Copyist → their own assigned copies; Registry Head → the court;
+        // Administrator → unrestricted (no order gate). Once printed, a copy may be re-printed anytime.
         var firstPrint = request.PrintedUtc is null;
-        if (firstPrint && await repository.AnyUnprintedRankedBeforeAsync(
-                [request.CourtId], isApproved, request.Urgency, request.CreatedUtc, ct))
-            throw new DomainException("يجب طباعة القرارات حسب الأولوية والتسلسل: الأعلى أولوية ثم الأقدم أولاً.");
+        if (firstPrint)
+        {
+            var blocked = currentUser.Role switch
+            {
+                Role.Administrator => false,
+                Role.Reviewer => await repository.AnyUnprintedRankedBeforeInRoomsAsync(
+                    currentUser.RoomIds, isApproved, request.Urgency, request.CreatedUtc, ct),
+                Role.Copyist => await repository.AnyUnprintedRankedBeforeForCopyistAsync(
+                    currentUser.Id, isApproved, request.Urgency, request.CreatedUtc, ct),
+                _ => await repository.AnyUnprintedRankedBeforeAsync(
+                    [request.CourtId], isApproved, request.Urgency, request.CreatedUtc, ct), // Registry Head
+            };
+            if (blocked)
+                throw new DomainException("يجب طباعة القرارات حسب الأولوية والتسلسل: الأعلى أولوية ثم الأقدم أولاً.");
+        }
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {

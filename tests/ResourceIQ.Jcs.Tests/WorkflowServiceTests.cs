@@ -31,13 +31,51 @@ public class WorkflowServiceTests
         var svc = new CreateCopyRequestService(user, _clock, _repo, allocator, new FakeMiscAllocator(), _audit, queries, _uow);
 
         var req = await svc.HandleAsync(
-            new CreateCopyRequestCommand(court, room, null, "case-1", CaseCategory.Normal, CaseUrgency.Suspended, null, null, Guid.NewGuid(), null),
+            new CreateCopyRequestCommand(court, room, null, "case-1", CaseCategory.Normal, CaseUrgency.Suspended, null, null, Guid.NewGuid(), null,
+                IssueGregorian: "2026-06-01"),
             CancellationToken.None);
 
         Assert.Equal("00000042", req.CopyNumber);
         Assert.Equal(CopyState.InPreparation, req.State);
         Assert.Equal(1, allocator.Calls);
         Assert.Contains(AuditAction.Create, _audit.Actions);
+    }
+
+    [Fact]
+    public async Task Create_numbers_by_issue_gregorian_year_not_system_date() // FR-06
+    {
+        var court = Guid.NewGuid();
+        var room = Guid.NewGuid();
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        user.Courts.Add(court);
+        var allocator = new FakeAllocator("00000042");
+        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null, CopyNumberingPolicy.Room) };
+        var svc = new CreateCopyRequestService(user, _clock, _repo, allocator, new FakeMiscAllocator(), _audit, queries, _uow);
+
+        // The system clock is 2026 (Now), but the Head enters an issue date of 2025 → numbered under 2025.
+        var req = await svc.HandleAsync(
+            new CreateCopyRequestCommand(court, room, new DateOnly(2024, 1, 1), "case-1", CaseCategory.Normal, CaseUrgency.Normal,
+                null, null, Guid.NewGuid(), null, IssueGregorian: "2025-03-10", FirstBaseNumber: "5/2024"),
+            CancellationToken.None);
+
+        Assert.Equal(2025, req.NumberingYear);       // from تاريخ الإصدار الميلادي, NOT the 2026 system year
+        Assert.Equal(2025, allocator.LastYear);      // the allocator numbered under 2025
+        Assert.Equal("5/2024", req.FirstBaseNumber); // رقم أول أساس captured
+    }
+
+    [Fact]
+    public async Task Create_requires_issue_gregorian_date() // FR-06
+    {
+        var court = Guid.NewGuid();
+        var room = Guid.NewGuid();
+        var user = new FakeCurrentUser { Role = Role.RegistryHead };
+        user.Courts.Add(court);
+        var queries = new FakeQueries { Room = new RoomDto(room, court, "R-001", "الغرفة الأولى", true, NumberingPolicy.Court, null, CopyNumberingPolicy.Room) };
+        var svc = new CreateCopyRequestService(user, _clock, _repo, new FakeAllocator(), new FakeMiscAllocator(), _audit, queries, _uow);
+
+        await Assert.ThrowsAsync<DomainException>(() => svc.HandleAsync(
+            new CreateCopyRequestCommand(court, room, null, "case-1", CaseCategory.Normal, CaseUrgency.Normal, null, null, Guid.NewGuid(), null),
+            CancellationToken.None)); // no IssueGregorian
     }
 
     [Fact]
@@ -213,6 +251,24 @@ public class WorkflowServiceTests
     }
 
     [Fact]
+    public async Task Reviewer_print_order_is_scoped_to_their_rooms() // FR-15 + BR-06
+    {
+        var court = Guid.NewGuid();
+        var expeditedOtherRoom = SeedApproved(court, CaseUrgency.Expedited); // higher priority, DIFFERENT room
+        var normalMyRoom = SeedApproved(court, CaseUrgency.Normal);          // lower priority, reviewer's room
+        var reviewer = new FakeCurrentUser { Role = Role.Reviewer };
+        reviewer.Rooms.Add(normalMyRoom.RoomId); // assigned ONLY to the normal copy's room
+        var svc = new PrintCopyService(reviewer, _repo, _clock, _audit, _uow);
+
+        // The higher-priority copy sits in a room the reviewer can't access, so it must NOT block the
+        // reviewer's own-room print (the print order is scoped to the reviewer's rooms, not the court).
+        await svc.HandleAsync(new PrintCopyCommand(normalMyRoom.Id), CancellationToken.None);
+
+        Assert.NotNull(normalMyRoom.PrintedUtc);
+        Assert.Null(expeditedOtherRoom.PrintedUtc); // untouched
+    }
+
+    [Fact]
     public async Task Approved_copy_can_be_reprinted_via_service() // FR-15 (revised): reprint allowed anytime
     {
         var court = Guid.NewGuid();
@@ -247,11 +303,11 @@ public class WorkflowServiceTests
         var svc = new CopyRequestReadService(head, new FakeQueries(), _clock,
             new FakeAllocator { Last = 41 }, new FakeMiscAllocator { Last = 7 });
 
-        var normal = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None);
+        var normal = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, 2026, CancellationToken.None);
         Assert.Equal(41, normal.Last);
         Assert.Equal(42, normal.Next);
 
-        var misc = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Miscellaneous, CancellationToken.None);
+        var misc = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Miscellaneous, 2026, CancellationToken.None);
         Assert.Equal(7, misc.Last);
         Assert.Equal(8, misc.Next);
     }
@@ -265,7 +321,7 @@ public class WorkflowServiceTests
         var svc = new CopyRequestReadService(head, new FakeQueries(), _clock,
             new FakeAllocator { Last = null }, new FakeMiscAllocator { Last = null });
 
-        var r = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None);
+        var r = await svc.GetLastIssuedNumberAsync(court, Guid.NewGuid(), CaseCategory.Normal, 2026, CancellationToken.None);
         Assert.Null(r.Last);
         Assert.Equal(1, r.Next);
     }
@@ -278,7 +334,7 @@ public class WorkflowServiceTests
         var svc = new CopyRequestReadService(head, new FakeQueries(), _clock, new FakeAllocator(), new FakeMiscAllocator());
 
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            svc.GetLastIssuedNumberAsync(Guid.NewGuid(), Guid.NewGuid(), CaseCategory.Normal, CancellationToken.None));
+            svc.GetLastIssuedNumberAsync(Guid.NewGuid(), Guid.NewGuid(), CaseCategory.Normal, 2026, CancellationToken.None));
     }
 
     // ── Deletion (FR-16, BR-09/BR-11) ───────────────────────────────────────

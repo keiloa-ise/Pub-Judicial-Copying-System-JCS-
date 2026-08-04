@@ -157,15 +157,15 @@ public sealed class CopyRequestReadService(
         return (await queries.ListCopyRequestsAsync(filter, 1, int.MaxValue, ct)).Items;
     }
 
-    /// <summary>FR-03/FR-06: the last sequential number issued for a court/room scope in the current
-    /// year — رقم النسخة for عادي, رقم المتفرق for متفرق — plus the number the next create will get.
-    /// Lets the Registry Head see the running number before adding a decision. Court-scoped (BR-06).</summary>
+    /// <summary>FR-03/FR-06: the last sequential number issued for a court/room scope in the given
+    /// <paramref name="year"/> (the issue year the Head is entering) — رقم النسخة for عادي, رقم المتفرق for
+    /// متفرق — plus the number the next create will get. Court-scoped (BR-06).</summary>
     public async Task<LastNumberDto> GetLastIssuedNumberAsync(
-        Guid courtId, Guid roomId, CaseCategory category, CancellationToken ct)
+        Guid courtId, Guid roomId, CaseCategory category, int year, CancellationToken ct)
     {
         Guard.RequireRole(currentUser, Role.RegistryHead);
         EnsureCanView(courtId, roomId); // BR-06: only within the head's assigned courts
-        var year = clock.UtcNow.Year; // تاريخ الحجز is server-assigned = today, so numbering is the current year
+        if (year <= 0) year = clock.UtcNow.Year; // fallback until an issue year is chosen on the form
         var last = category == CaseCategory.Miscellaneous
             ? await miscAllocator.PeekLastAsync(courtId, roomId, year, ct)
             : await copyAllocator.PeekLastAsync(courtId, roomId, year, ct);

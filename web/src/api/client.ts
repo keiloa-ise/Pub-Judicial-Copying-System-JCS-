@@ -273,6 +273,7 @@ export const api = {
     category: CaseCategory; urgency: CaseUrgency; expediteRequestNumber: string | null;
     referenceNumber: string | null; assignedCopyistId: string; originalCopyId: string | null;
     year?: string | null; issueHijri?: string | null; issueGregorian?: string | null;
+    firstBaseNumber?: string | null;
   }) => request<{ id: string; copyNumber: string; state: string }>(
     "/api/copy-requests", { method: "POST", body: JSON.stringify(body) }),
   // FR-07: copyist accepts the copy before editing. FR-06: head escalates a non-approved copy.
@@ -287,8 +288,8 @@ export const api = {
   originals: (roomId: string, search: string) =>
     request<OriginalCopyOption[]>(`/api/copy-requests/originals?roomId=${roomId}&search=${encodeURIComponent(search)}`),
   // FR-03/FR-06: last issued sequential number for a court/room scope (عادي → رقم النسخة, متفرق → رقم المتفرق).
-  lastNumber: (courtId: string, roomId: string, category: CaseCategory) =>
-    request<LastNumber>(`/api/copy-requests/last-number?courtId=${courtId}&roomId=${roomId}&category=${category}`),
+  lastNumber: (courtId: string, roomId: string, category: CaseCategory, year: number) =>
+    request<LastNumber>(`/api/copy-requests/last-number?courtId=${courtId}&roomId=${roomId}&category=${category}&year=${year}`),
   // FR-16: deletion window — latest عادي per court + last متفرق per scope; delete by copy id.
   deletionTargets: () => request<DeletionTargets>("/api/copy-requests/deletion-targets"),
   deleteRequest: (id: string) => request<void>(`/api/copy-requests/${id}`, { method: "DELETE" }),

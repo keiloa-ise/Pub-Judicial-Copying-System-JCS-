@@ -31,8 +31,10 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
         // Advanced-search narrowing
         if (!string.IsNullOrWhiteSpace(filter.CopyNumber))
             baseQ = baseQ.Where(cr => cr.CopyNumber != null && cr.CopyNumber.Contains(filter.CopyNumber));
+        // رقم الأساس search also matches رقم أول أساس (FirstBaseNumber), so a decision is found by either.
         if (!string.IsNullOrWhiteSpace(filter.CaseBaseNumber))
-            baseQ = baseQ.Where(cr => cr.CaseBaseNumber.Contains(filter.CaseBaseNumber));
+            baseQ = baseQ.Where(cr => cr.CaseBaseNumber.Contains(filter.CaseBaseNumber)
+                || (cr.FirstBaseNumber != null && cr.FirstBaseNumber.Contains(filter.CaseBaseNumber)));
         if (filter.FromReservation is { } from) baseQ = baseQ.Where(cr => cr.ReservationDate >= from);
         if (filter.ToReservation is { } to) baseQ = baseQ.Where(cr => cr.ReservationDate <= to);
 
@@ -124,15 +126,24 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
     {
         var ids = courtIds?.ToArray();
 
-        // ── عادي: the latest copy per court for the year (BR-09). ──
+        // ── عادي: the LAST copy per (numbering scope, issue year) among copies CREATED this calendar
+        // year (BR-09). "Recent" = created this calendar year (protects prior calendar years); the numbering
+        // scope follows CopyNumberingPolicy (court-wide or per-room) and the issue year is NumberingYear —
+        // mirroring the delete guard's PeekLast(scope, year), so every listed row is actually deletable
+        // (incl. copies backdated to a past issue year but created recently, and each room under per-room numbering).
         var nq = from cr in db.CopyRequests.AsNoTracking()
                  join c in db.Courts on cr.CourtId equals c.Id
                  join rm in db.Rooms on cr.RoomId equals rm.Id
                  where cr.ReservationDate.Year == year && cr.Category == CaseCategory.Normal && cr.CopyNumber != null
-                 select new { cr.Id, CopyNumber = cr.CopyNumber!, cr.CourtId, CourtName = c.Name, RoomName = rm.Name, cr.State, cr.CreatedUtc };
+                 select new { cr.Id, CopyNumber = cr.CopyNumber!, cr.CourtId, cr.RoomId, rm.CopyNumberingPolicy, cr.NumberingYear, CourtName = c.Name, RoomName = rm.Name, cr.State };
         if (ids is not null) nq = nq.Where(x => ids.Contains(x.CourtId));
         var nrows = await nq.ToListAsync(ct);
-        var latest = nrows.GroupBy(r => r.CourtId).Select(g => g.OrderByDescending(x => x.CreatedUtc).First()).ToList();
+        var latest = nrows
+            // group by the copy-number scope (court-wide vs per-room) + issue year; the highest zero-padded
+            // number in a group is its last (== the counter's LastNumber).
+            .GroupBy(r => (r.CourtId, ScopeRoom: r.CopyNumberingPolicy == CopyNumberingPolicy.Room ? r.RoomId : Guid.Empty, r.NumberingYear))
+            .Select(g => g.OrderByDescending(x => x.CopyNumber, StringComparer.Ordinal).First())
+            .ToList();
 
         // Which of those have linked متفرق copies (then they can't be deleted yet).
         var latestIds = latest.Select(x => x.Id).ToArray();
@@ -144,7 +155,7 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
             .Select(x => new DeletableCopyDto(x.CourtId, x.CourtName, x.Id, x.CopyNumber, x.RoomName, x.State, linkedSet.Contains(x.Id)))
             .OrderBy(d => d.CourtName).ToList();
 
-        // ── متفرق: the last one per numbering scope for the year (BR-11). ──
+        // ── متفرق: the last one per (numbering scope, issue year) among copies created this calendar year (BR-11). ──
         var mq = from cr in db.CopyRequests.AsNoTracking()
                  join c in db.Courts on cr.CourtId equals c.Id
                  join rm in db.Rooms on cr.RoomId equals rm.Id
@@ -154,17 +165,17 @@ public sealed class JcsQueries(JcsDbContext db) : IJcsQueries
                  select new
                  {
                      cr.Id, Misc = cr.MiscNumber!.Value, cr.CourtId, CourtName = c.Name, cr.RoomId, RoomName = rm.Name,
-                     rm.NumberingPolicy, rm.NumberingLevel, cr.State, cr.ReferenceNumber,
+                     rm.NumberingPolicy, rm.NumberingLevel, cr.NumberingYear, cr.State, cr.ReferenceNumber,
                      OriginalCopyNumber = (string?)(orig != null ? orig.CopyNumber : null),
                  };
         if (ids is not null) mq = mq.Where(x => ids.Contains(x.CourtId));
         var mrows = await mq.ToListAsync(ct);
         var miscs = mrows
-            .GroupBy(r => Room.ScopeKey(r.NumberingPolicy, r.CourtId, r.RoomId, r.NumberingLevel))
+            .GroupBy(r => (Scope: Room.ScopeKey(r.NumberingPolicy, r.CourtId, r.RoomId, r.NumberingLevel), r.NumberingYear))
             .Select(g =>
             {
                 var cand = g.OrderByDescending(x => x.Misc).First();
-                return new DeletableMiscDto(g.Key, cand.CourtId, cand.CourtName,
+                return new DeletableMiscDto(g.Key.Scope, cand.CourtId, cand.CourtName,
                     ScopeLabel(cand.NumberingPolicy, cand.RoomName, cand.NumberingLevel),
                     cand.Id, cand.Misc, cand.OriginalCopyNumber, cand.ReferenceNumber, cand.State);
             })

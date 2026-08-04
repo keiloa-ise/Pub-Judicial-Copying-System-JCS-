@@ -10,6 +10,21 @@ const asStr = (v: unknown) => (typeof v === "string" ? v : "");
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
 
+/** Gregorian ISO date (YYYY-MM-DD) → Hijri (Umm al-Qura) as YYYY/MM/DD in Latin digits, via the browser
+ *  Intl calendar (no library). Empty when the input is empty/invalid. */
+function gregorianToHijri(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura",
+    { day: "2-digit", month: "2-digit", year: "numeric" }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const y = get("year"), m = get("month"), day = get("day");
+  return y && m && day ? `${y}/${m}/${day}` : "";
+}
+/** The 4-digit year from an ISO date string (empty when absent). */
+const yearOf = (iso: string) => (iso.length >= 4 ? iso.slice(0, 4) : "");
+
 /**
  * FR-06 / BR-11: Registry Head creates a copy request.
  * - عادي: pick court + room; the system issues the sequential رقم النسخة.
@@ -43,6 +58,7 @@ export function CreateRequestPage() {
   const [year, setYear] = useState("");
   const [issueHijri, setIssueHijri] = useState("");
   const [issueGregorian, setIssueGregorian] = useState("");
+  const [firstBaseNo, setFirstBaseNo] = useState(""); // رقم أول أساس (shown when issue year ≠ filing year)
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const searchSeq = useRef(0);
@@ -114,13 +130,17 @@ export function CreateRequestPage() {
   // User-driven selection changes reset dependent fields (a restore bypasses these by setting state directly).
   function pickCourt(v: string) { setCourtId(v); setRoomId(""); setCopyistId(""); setOriginalId(""); setOriginalSearch(""); }
   function pickRoom(v: string) { setRoomId(v); setCopyistId(""); setOriginalId(""); setOriginalSearch(""); }
+  // Selecting (تاريخ الإصدار - ميلادي) auto-fills the Hijri date + السنة (both still editable).
+  function pickIssueGregorian(v: string) { setIssueGregorian(v); setIssueHijri(gregorianToHijri(v)); setYear(yearOf(v)); }
+  // رقم أول أساس appears only when the issue year differs from the filing year.
+  const showFirstBase = !!issueGregorian && !!filingDate && yearOf(issueGregorian) !== yearOf(filingDate);
 
   // JC-32: auto-save/restore the whole create form (Registry Head only). Restore sets state directly;
   // because the reset logic lives in pickCourt/pickRoom (not effects), restored fields are never wiped.
   const draftPayload = useMemo(() => ({
     courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo,
-    year, issueHijri, issueGregorian,
-  }), [courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo, year, issueHijri, issueGregorian]);
+    year, issueHijri, issueGregorian, firstBaseNo,
+  }), [courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo, year, issueHijri, issueGregorian, firstBaseNo]);
   const autoSave = useAutoSaveDraft({
     userId: user?.userId, role: user?.role,
     formKey: user ? `registry-head:create-copy-request:${user.userId}` : null,
@@ -133,17 +153,20 @@ export function CreateRequestPage() {
       setUrgency(p.urgency === "Suspended" || p.urgency === "Expedited" ? p.urgency : "Normal");
       setExpediteNo(asStr(p.expediteNo)); setReferenceNo(asStr(p.referenceNo));
       setYear(asStr(p.year)); setIssueHijri(asStr(p.issueHijri)); setIssueGregorian(asStr(p.issueGregorian));
+      setFirstBaseNo(asStr(p.firstBaseNo));
     },
   });
 
-  // FR-03/FR-06: once court+room are chosen, show the last issued number for that scope this year.
+  // FR-03/FR-06: once court+room are chosen, show the last issued number for that scope in the SELECTED
+  // issue year (from تاريخ الإصدار الميلادي) — falls back to the current year until a date is picked.
   useEffect(() => {
     setLastNo(null);
     if (!courtId || !roomId) return;
+    const yr = Number(yearOf(issueGregorian)) || new Date().getFullYear();
     let cancelled = false;
-    api.lastNumber(courtId, roomId, category).then((r) => { if (!cancelled) setLastNo(r); }).catch(() => {});
+    api.lastNumber(courtId, roomId, category, yr).then((r) => { if (!cancelled) setLastNo(r); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [courtId, roomId, category]);
+  }, [courtId, roomId, category, issueGregorian]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -155,6 +178,7 @@ export function CreateRequestPage() {
     if (isMisc && !originalId) validationErrors.push(L("يجب اختيار النسخة الأصلية (قرار معتمد).", "Select the original (Approved) copy."));
     if (!isMisc && !caseBase.trim()) validationErrors.push(L("يجب إدخال رقم الأساس.", "Enter the case base number."));
     if (urgency === "Expedited" && !expediteNo.trim()) validationErrors.push(L("يجب إدخال رقم طلب الاستعجال.", "Enter the expedite request number."));
+    if (!issueGregorian) validationErrors.push(L("يجب اختيار تاريخ الإصدار (ميلادي).", "Select the issue date (Gregorian)."));
     if (validationErrors.length > 0) {
       setErr(validationErrors.join("\n"));
       return;
@@ -175,6 +199,7 @@ export function CreateRequestPage() {
         year: year.trim() || null,
         issueHijri: issueHijri.trim() || null,
         issueGregorian: issueGregorian || null,
+        firstBaseNumber: showFirstBase && firstBaseNo.trim() ? firstBaseNo.trim() : null,
       });
       await autoSave.clearDraft(); // JC-32: work is committed — drop the recovery draft
       navigate("request", res.id);
@@ -293,6 +318,13 @@ export function CreateRequestPage() {
               <input value={caseBase} onChange={(e) => setCaseBase(e.target.value)} required />
             </label>
           )}
+          {!isMisc && showFirstBase && (
+            <label className="field">
+              <span>{L("رقم أول أساس", "First base number")}</span>
+              <input value={firstBaseNo} onChange={(e) => setFirstBaseNo(e.target.value)}
+                placeholder={L("الأساس الأصلي من سنة القيد", "Original base from the filing year")} />
+            </label>
+          )}
           <label className="field">
             <span>{L("قيد الدعوى", "Case filing date")}</span>
             <input type="date" value={filingDate} onChange={(e) => setFilingDate(e.target.value)} />
@@ -333,7 +365,7 @@ export function CreateRequestPage() {
           </label>
           <label className="field">
             <span>{L("تاريخ الإصدار (ميلادي)", "Issue date (Gregorian)")}</span>
-            <input type="date" value={issueGregorian} onChange={(e) => setIssueGregorian(e.target.value)} />
+            <input type="date" value={issueGregorian} onChange={(e) => pickIssueGregorian(e.target.value)} required />
           </label>
         </div>
 

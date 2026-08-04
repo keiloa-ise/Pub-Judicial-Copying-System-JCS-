@@ -46,7 +46,7 @@ public sealed class DeleteCopyService(
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
-            var year = request.ReservationDate.Year;
+            var year = request.NumberingYear; // the copy was numbered under its issue year (not the system date)
             var copyJson = request.CopyNumber is null ? "null" : $"\"{request.CopyNumber}\"";
             var miscJson = request.MiscNumber is { } m ? m.ToString() : "null";
 

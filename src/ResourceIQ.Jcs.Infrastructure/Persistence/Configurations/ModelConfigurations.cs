@@ -110,6 +110,7 @@ public sealed class CopyRequestConfiguration : IEntityTypeConfiguration<CopyRequ
         b.HasKey(x => x.Id);
         b.Property(x => x.CopyNumber).HasMaxLength(60);
         b.Property(x => x.CaseBaseNumber).HasMaxLength(100).IsRequired();
+        b.Property(x => x.FirstBaseNumber).HasMaxLength(100); // رقم أول أساس (optional, searchable)
         b.Property(x => x.ExpediteRequestNumber).HasMaxLength(100); // رقم طلب الاستعجال (nullable)
         b.Property(x => x.ReferenceNumber).HasMaxLength(100);       // رقم المرجع (nullable, متفرق only)
         b.Property(x => x.State).HasConversion<int>();

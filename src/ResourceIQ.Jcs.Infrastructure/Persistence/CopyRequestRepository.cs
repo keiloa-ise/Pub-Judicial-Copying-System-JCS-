@@ -41,17 +41,30 @@ public sealed class CopyRequestRepository(JcsDbContext db) : ICopyRequestReposit
             .ToListAsync(ct);
 
     public Task<bool> AnyUnprintedRankedBeforeAsync(
-        IReadOnlyCollection<Guid> courtIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct)
+        IReadOnlyCollection<Guid> courtIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        UnprintedRankedBeforeQuery(isApproved, urgency, createdUtc)
+            .Where(x => courtIds.Contains(x.CourtId)).AnyAsync(ct);
+
+    public Task<bool> AnyUnprintedRankedBeforeInRoomsAsync(
+        IReadOnlyCollection<Guid> roomIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        UnprintedRankedBeforeQuery(isApproved, urgency, createdUtc)
+            .Where(x => roomIds.Contains(x.RoomId)).AnyAsync(ct);
+
+    public Task<bool> AnyUnprintedRankedBeforeForCopyistAsync(
+        Guid copyistId, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct) =>
+        UnprintedRankedBeforeQuery(isApproved, urgency, createdUtc)
+            .Where(x => x.AssignedCopyistId == copyistId).AnyAsync(ct);
+
+    /// <summary>NOT-YET-PRINTED copies in the same print queue (approved vs draft) that rank BEFORE the
+    /// given one (higher tier, or same tier but older). The caller adds the scope filter (court/room/copyist).</summary>
+    private IQueryable<CopyRequest> UnprintedRankedBeforeQuery(bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc)
     {
-        var q = db.CopyRequests.Where(x => courtIds.Contains(x.CourtId)
-            && x.PrintedUtc == null
-            // same ranking as acceptance/approval: higher tier, or same tier but created earlier.
+        var q = db.CopyRequests.Where(x => x.PrintedUtc == null
             && (x.Urgency < urgency || (x.Urgency == urgency && x.CreatedUtc < createdUtc)));
         // Approved and non-approved copies form independent print queues (each ordered on its own).
-        q = isApproved
+        return isApproved
             ? q.Where(x => x.State == Domain.Enums.CopyState.Approved)
             : q.Where(x => x.State != Domain.Enums.CopyState.Approved);
-        return q.AnyAsync(ct);
     }
 
     // FR-16: the only delete path. CopyContent cascades; AuditEntries have no FK/cascade → kept.

@@ -11,9 +11,10 @@ namespace ResourceIQ.Jcs.Application.Abstractions;
 /// </summary>
 public interface ICopyNumberAllocator
 {
-    /// <summary>Allocates رقم النسخة for a copy in the given room. The numbering scope (court-wide or
-    /// per-room) and the printed format follow the room's <c>CopyNumberingPolicy</c> (FR-03).</summary>
-    Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct);
+    /// <summary>Allocates رقم النسخة for a copy in the given room for the given YEAR — the Gregorian issue
+    /// year chosen by the Registry Head (تاريخ الإصدار الميلادي), NOT the system date. The numbering scope
+    /// (court-wide or per-room) and the printed format follow the room's <c>CopyNumberingPolicy</c> (FR-03).</summary>
+    Task<string> AllocateAsync(Guid courtId, Guid roomId, int year, CancellationToken ct);
 
     /// <summary>FR-16: roll back the room's scope+year counter by one when the latest copy is deleted,
     /// so the next allocation reuses the freed number (no gap). The caller guarantees the deleted

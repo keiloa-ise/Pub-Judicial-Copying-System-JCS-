@@ -32,6 +32,15 @@ public class CopyRequest
     /// <summary>قيد الدعوى — the case-filing date (optional). Replaces the former "مرجع الحكم".</summary>
     public DateOnly? CaseFilingDate { get; private set; }
     public string CaseBaseNumber { get; private set; } = string.Empty;
+
+    /// <summary>رقم أول أساس — the ORIGINAL base number from the filing year, captured (optionally) when the
+    /// decision's issue year differs from its filing year (FR-06). Searchable alongside رقم الأساس.</summary>
+    public string? FirstBaseNumber { get; private set; }
+
+    /// <summary>The Gregorian YEAR the copy is numbered under — taken from (تاريخ الإصدار - ميلادي) chosen by
+    /// the Registry Head at creation, NOT the system date. Drives the sequential number's year segment, the
+    /// per-year counter, and delete/renumber. Set once at creation.</summary>
+    public int NumberingYear { get; private set; }
     public DateOnly ReservationDate { get; private set; }
 
     /// <summary>Classifications chosen by the Registry Head at creation (FR-06).</summary>
@@ -104,7 +113,11 @@ public class CopyRequest
         Guid courtId, Guid roomId, DateOnly? caseFilingDate, string caseBaseNumber,
         DateOnly reservationDate, CaseCategory category, CaseUrgency urgency,
         string? expediteRequestNumber, string? referenceNumber, Guid? originalCopyId,
-        Guid createdById, DateTimeOffset nowUtc)
+        Guid createdById, DateTimeOffset nowUtc,
+        // FR-06: numberingYear = the Gregorian issue year that drives the sequential number (0 => fall back
+        // to the reservation year). firstBaseNumber = رقم أول أساس (optional). Trailing + defaulted so the
+        // callers that don't decouple the numbering year stay unchanged.
+        int numberingYear = 0, string? firstBaseNumber = null)
     {
         if (courtId == Guid.Empty) throw new DomainException("Court is required.");
         if (roomId == Guid.Empty) throw new DomainException("Room is required.");
@@ -126,7 +139,9 @@ public class CopyRequest
             RoomId = roomId,
             CaseFilingDate = caseFilingDate,
             CaseBaseNumber = caseBaseNumber.Trim(),
+            FirstBaseNumber = string.IsNullOrWhiteSpace(firstBaseNumber) ? null : firstBaseNumber.Trim(),
             ReservationDate = reservationDate,
+            NumberingYear = numberingYear > 0 ? numberingYear : reservationDate.Year,
             Category = category,
             Urgency = urgency,
             ExpediteRequestNumber = urgency == CaseUrgency.Expedited ? expediteRequestNumber!.Trim() : null,

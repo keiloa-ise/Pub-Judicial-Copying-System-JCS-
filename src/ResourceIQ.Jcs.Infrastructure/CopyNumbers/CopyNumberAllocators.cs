@@ -14,7 +14,7 @@ namespace ResourceIQ.Jcs.Infrastructure.CopyNumbers;
 /// </summary>
 public sealed class PendingCopyNumberAllocator : ICopyNumberAllocator
 {
-    public Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct) =>
+    public Task<string> AllocateAsync(Guid courtId, Guid roomId, int year, CancellationToken ct) =>
         throw new NotSupportedException(
             "Copy-number scope/format is undefined. Register a concrete ICopyNumberAllocator " +
             "(e.g. PerCourtCopyNumberAllocator).");
@@ -50,9 +50,9 @@ public sealed class PerCourtCopyNumberAllocator(JcsDbContext db) : ICopyNumberAl
             : (Guid.Empty, room.CourtCode, null);     // court-wide sequence; no room code
     }
 
-    public async Task<string> AllocateAsync(Guid courtId, Guid roomId, DateOnly reservationDate, CancellationToken ct)
+    public async Task<string> AllocateAsync(Guid courtId, Guid roomId, int year, CancellationToken ct)
     {
-        var year = reservationDate.Year; // the case's year drives the sequence + the printed number
+        // `year` = the Gregorian issue year (تاريخ الإصدار الميلادي) — drives the sequence + printed number.
         var (scopeRoomId, courtCode, roomCode) = await ResolveScopeAsync(roomId, ct);
 
         var conn = db.Database.GetDbConnection();

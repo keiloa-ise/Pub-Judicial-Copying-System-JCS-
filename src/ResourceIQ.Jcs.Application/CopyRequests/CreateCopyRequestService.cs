@@ -19,10 +19,13 @@ public sealed record CreateCopyRequestCommand(
     Guid AssignedCopyistId,
     Guid? OriginalCopyId,
     // FR-06: the Registry Head enters the issue date (هجري/ميلادي) and السنة on the new-request form;
-    // they are seeded into the copy's content so the copyist no longer edits them.
+    // they are seeded into the copy's content so the copyist no longer edits them. IssueGregorian is
+    // REQUIRED — its year drives the copy's numbering (NOT the system date).
     string? Year = null,
     string? IssueHijri = null,
-    string? IssueGregorian = null);
+    string? IssueGregorian = null,
+    // رقم أول أساس (optional) — the original base number from the filing year (when it differs from the issue year).
+    string? FirstBaseNumber = null);
 // Note: تاريخ الحجز (ReservationDate) is NOT a client input — the server assigns it at creation.
 
 /// <summary>
@@ -74,27 +77,34 @@ public sealed class CreateCopyRequestService(
                 throw new DomainException("رقم الأساس مستخدم مسبقاً لقرار عادي في هذه المحكمة.");
         }
 
+        // FR-06: the copy is numbered under the YEAR of (تاريخ الإصدار - ميلادي) chosen by the Head,
+        // NOT the system date. IssueGregorian is required.
+        if (!DateOnly.TryParse(cmd.IssueGregorian, out var issueGregorianDate))
+            throw new DomainException("تاريخ الإصدار (ميلادي) مطلوب.");
+        var numberingYear = issueGregorianDate.Year;
+
         return await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
             var now = clock.UtcNow;
-            // تاريخ الحجز is server-assigned (non-editable) — it also drives the numbering year.
+            // تاريخ الحجز is server-assigned (non-editable) — the record date, separate from the numbering year.
             var reservationDate = DateOnly.FromDateTime(now.Date);
 
             var request = CopyRequest.Create(
                 courtId, roomId, cmd.CaseFilingDate, caseBase, reservationDate,
-                cmd.Category, cmd.Urgency, cmd.ExpediteRequestNumber, cmd.ReferenceNumber, original?.Id, currentUser.Id, now);
+                cmd.Category, cmd.Urgency, cmd.ExpediteRequestNumber, cmd.ReferenceNumber, original?.Id, currentUser.Id, now,
+                numberingYear, cmd.FirstBaseNumber);
 
             if (cmd.Category == CaseCategory.Miscellaneous)
             {
                 // متفرق: only رقم المتفرق (per the room's numbering policy; yearly). No رقم النسخة.
-                var misc = await miscAllocator.AllocateAsync(courtId, roomId, reservationDate.Year, token);
+                var misc = await miscAllocator.AllocateAsync(courtId, roomId, numberingYear, token);
                 request.AssignMiscNumber(misc);
             }
             else
             {
-                // عادي: allocate the sequential رقم النسخة inside the transaction (BR-07). Scope
-                // (court-wide or per-room) follows the room's CopyNumberingPolicy (FR-03).
-                var number = await allocator.AllocateAsync(courtId, roomId, reservationDate, token);
+                // عادي: allocate the sequential رقم النسخة inside the transaction (BR-07) under the issue
+                // YEAR. Scope (court-wide or per-room) follows the room's CopyNumberingPolicy (FR-03).
+                var number = await allocator.AllocateAsync(courtId, roomId, numberingYear, token);
                 request.AssignNumber(number);
             }
 

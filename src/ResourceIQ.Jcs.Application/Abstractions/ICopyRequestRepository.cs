@@ -39,12 +39,22 @@ public interface ICopyRequestRepository
     Task<IReadOnlyList<RankedCopyRef>> ListUnderReviewRankedBeforeAsync(
         IReadOnlyCollection<Guid> roomIds, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
 
-    /// <summary>FR-15 print ordering: true if any NOT-YET-PRINTED copy in the given courts, in the same
-    /// print queue (<paramref name="isApproved"/> = approved vs draft), ranks BEFORE the given one —
-    /// higher priority tier, or the same tier but older. Printing follows موقوف > مستعجل > عادي then
+    /// <summary>FR-15 print ordering (Registry Head scope): true if any NOT-YET-PRINTED copy in the given
+    /// COURTS, in the same print queue (<paramref name="isApproved"/> = approved vs draft), ranks BEFORE
+    /// the given one — higher priority tier, or the same tier but older. موقوف > مستعجل > عادي then
     /// oldest-first, with the approved and non-approved queues ordered independently.</summary>
     Task<bool> AnyUnprintedRankedBeforeAsync(
         IReadOnlyCollection<Guid> courtIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
+
+    /// <summary>FR-15 print ordering (Reviewer scope): as above but scoped to the reviewer's ROOMS —
+    /// the print order matches the room-scoped reviewer print queue.</summary>
+    Task<bool> AnyUnprintedRankedBeforeInRoomsAsync(
+        IReadOnlyCollection<Guid> roomIds, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
+
+    /// <summary>FR-15 print ordering (Copyist scope): as above but scoped to the copyist's OWN assigned
+    /// copies — the print order matches the assignment-scoped copyist print queue.</summary>
+    Task<bool> AnyUnprintedRankedBeforeForCopyistAsync(
+        Guid copyistId, bool isApproved, Domain.Enums.CaseUrgency urgency, DateTimeOffset createdUtc, CancellationToken ct);
 
     /// <summary>Removes the copy request (its CopyContent cascades; audit rows are untouched).</summary>
     void Remove(CopyRequest request);
