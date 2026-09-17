@@ -136,6 +136,49 @@
   .errorbox,
   .errorbox::after { animation: none; }
 }
+.successbox {
+  position: fixed;
+  top: 88px;
+  left: 14px;
+  z-index: 1400;
+  width: min(500px, calc(100vw - 28px));
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--green-600) 0%, var(--green-800) 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  box-shadow: 0 20px 44px rgba(9, 48, 36, .28);
+  padding: 17px 22px 20px;
+  font-size: 15.5px;
+  font-weight: 800;
+  line-height: 1.65;
+  margin: 0;
+  text-align: start;
+  animation: errorbox-in .18s ease-out;
+}
+.successbox::before {
+  content: "";
+  position: absolute;
+  inset-block: 14px;
+  inset-inline-start: 0;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .72);
+}
+.successbox::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, .72);
+  transform-origin: left center;
+  animation: errorbox-timer 4s linear forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .successbox,
+  .successbox::after { animation: none; }
+}
 .returnbanner { background: #fff3d6; color: #8a5a0a; border: 1px solid #f0d18a; border-inline-start: 5px solid #d99a2b; border-radius: 10px; padding: 13px 16px; font-size: 14.5px; margin-bottom: 16px; line-height: 1.7; }
 .returnbanner strong { display: block; margin-bottom: 3px; }
 .okbox { background: #e3f6ea; color: #1d7a47; border: 1px solid #b8e6c9; border-radius: 10px; padding: 11px 15px; font-size: 14px; margin-bottom: 14px; }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, type Court, type Room, type Lookup, type CaseCategory, type CaseUrgency, type OriginalCopyOption, type LastNumber } from "../../api/client";
 import { useNav } from "../../app/nav";
-import { useL, ErrorBox, SearchableSelect, categoryLabels, urgencyLabels } from "../../app/ui";
+import { useL, ErrorBox, SuccessBox, SearchableSelect, categoryLabels, urgencyLabels } from "../../app/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { useAutoSaveDraft } from "../../hooks/useAutoSaveDraft";
 import { useI18n } from "../../i18n";
@@ -9,6 +9,22 @@ import { useI18n } from "../../i18n";
 const asStr = (v: unknown) => (typeof v === "string" ? v : "");
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
+
+// Speed-up-repeat-entry: after each successful create, remember the submitted field values (per
+// Registry Head) so the next "new request" form opens pre-filled — most requests only change one
+// field (e.g. رقم الأساس). Distinct from the JC-32 recovery draft: this is not cleared on submit,
+// carries no restore prompt, and is scoped per user so it never leaks across accounts on a shared machine.
+function lastRequestValuesKey(userId: string) { return `jcs:last-request-values:${userId}`; }
+function readLastRequestValues(userId?: string | null): Record<string, unknown> | null {
+  if (!userId || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(lastRequestValuesKey(userId));
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+  } catch { return null; }
+}
+function writeLastRequestValues(userId: string, payload: Record<string, unknown>) {
+  try { window.localStorage.setItem(lastRequestValuesKey(userId), JSON.stringify(payload)); } catch { /* best-effort */ }
+}
 
 /** Gregorian ISO date (YYYY-MM-DD) → Hijri (Umm al-Qura) as YYYY/MM/DD in Latin digits, via the browser
  *  Intl calendar (no library). Empty when the input is empty/invalid. */
@@ -61,7 +77,10 @@ export function CreateRequestPage() {
   const [firstBaseNo, setFirstBaseNo] = useState(""); // رقم أول أساس (shown when issue year ≠ filing year)
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [prefilledFromLast, setPrefilledFromLast] = useState(false);
+  const [created, setCreated] = useState(false);
   const searchSeq = useRef(0);
+  const appliedLastValuesRef = useRef(false);
 
   const isMisc = category === "Miscellaneous";
   const courtOptions = courts.map((c) => ({
@@ -141,6 +160,10 @@ export function CreateRequestPage() {
     courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo,
     year, issueHijri, issueGregorian, firstBaseNo,
   }), [courtId, roomId, originalId, originalSearch, copyistId, filingDate, caseBase, category, urgency, expediteNo, referenceNo, year, issueHijri, issueGregorian, firstBaseNo]);
+  // Dismiss the "created successfully" notice once the user actually edits a field again (a fresh
+  // edit means they've moved on from the request that notice was about). Doesn't fire right after
+  // submit's own applyValues() call, since that sets fields back to their already-current values.
+  useEffect(() => { console.log("[DEBUG] clearing created via draftPayload effect"); setCreated(false); }, [draftPayload]);
   const autoSave = useAutoSaveDraft({
     userId: user?.userId, role: user?.role,
     formKey: user ? `registry-head:create-copy-request:${user.userId}` : null,
@@ -157,8 +180,35 @@ export function CreateRequestPage() {
     },
   });
 
+  // Shared by the mount pre-fill below and by the post-submit re-fill (see submit()).
+  function applyValues(v: Record<string, unknown>) {
+    setCourtId(asStr(v.courtId)); setRoomId(asStr(v.roomId)); setOriginalId(asStr(v.originalId));
+    setOriginalSearch(asStr(v.originalSearch)); setCopyistId(asStr(v.copyistId)); setFilingDate(asStr(v.filingDate));
+    setCaseBase(asStr(v.caseBase)); setCategory(v.category === "Miscellaneous" ? "Miscellaneous" : "Normal");
+    setUrgency(v.urgency === "Suspended" || v.urgency === "Expedited" ? v.urgency : "Normal");
+    setExpediteNo(asStr(v.expediteNo)); setReferenceNo(asStr(v.referenceNo));
+    setYear(asStr(v.year)); setIssueHijri(asStr(v.issueHijri)); setIssueGregorian(asStr(v.issueGregorian));
+    setFirstBaseNo(asStr(v.firstBaseNo));
+  }
+
+  // Pre-fill from the last successfully created request (see readLastRequestValues above). Runs once
+  // per mount; if a JC-32 recovery draft also exists, its (later, async) restore overwrites these
+  // defaults, since an interrupted in-progress edit takes priority over a generic convenience pre-fill.
+  useEffect(() => {
+    if (appliedLastValuesRef.current) return;
+    if (!user?.userId || user.role !== "RegistryHead") return;
+    appliedLastValuesRef.current = true;
+    const last = readLastRequestValues(user.userId);
+    if (!last) return;
+    applyValues(last);
+    setPrefilledFromLast(true);
+  }, [user]);
+
   // FR-03/FR-06: once court+room are chosen, show the last issued number for that scope in the SELECTED
   // issue year (from تاريخ الإصدار الميلادي) — falls back to the current year until a date is picked.
+  // lastNoRefreshKey is bumped after each successful create so this re-fetches even though
+  // courtId/roomId/category/issueGregorian are unchanged when the form re-opens pre-filled.
+  const [lastNoRefreshKey, setLastNoRefreshKey] = useState(0);
   useEffect(() => {
     setLastNo(null);
     if (!courtId || !roomId) return;
@@ -166,7 +216,14 @@ export function CreateRequestPage() {
     let cancelled = false;
     api.lastNumber(courtId, roomId, category, yr).then((r) => { if (!cancelled) setLastNo(r); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [courtId, roomId, category, issueGregorian]);
+  }, [courtId, roomId, category, issueGregorian, lastNoRefreshKey]);
+
+  function clearPrefilledFields() {
+    setCourtId(""); setRoomId(""); setOriginalId(""); setOriginalSearch(""); setCopyistId("");
+    setFilingDate(""); setCaseBase(""); setCategory("Normal"); setUrgency("Normal");
+    setExpediteNo(""); setReferenceNo(""); setYear(""); setIssueHijri(""); setIssueGregorian(""); setFirstBaseNo("");
+    setPrefilledFromLast(false); setCreated(false);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -186,7 +243,7 @@ export function CreateRequestPage() {
 
     setBusy(true);
     try {
-      const res = await api.createRequest({
+      await api.createRequest({
         courtId,                                           // متفرق: server re-derives court from the original
         roomId: isMisc ? EMPTY_GUID : roomId,              // متفرق: server uses the original's room
         caseBaseNumber: isMisc ? "" : caseBase,            // متفرق: server uses the original's رقم الأساس
@@ -202,7 +259,15 @@ export function CreateRequestPage() {
         firstBaseNumber: showFirstBase && firstBaseNo.trim() ? firstBaseNo.trim() : null,
       });
       await autoSave.clearDraft(); // JC-32: work is committed — drop the recovery draft
-      navigate("request", res.id);
+      if (user?.userId) writeLastRequestValues(user.userId, draftPayload); // remember for the next request
+      console.log("[DEBUG] setCreated(true) called");
+      setCreated(true);
+      applyValues(draftPayload); // re-open the form pre-filled so the next similar request is one edit away
+      setPrefilledFromLast(true);
+      setLastNoRefreshKey((k) => k + 1);
+      // The success notice renders at the top of the (long) form, but the submit button is at the
+      // bottom — without this the user stays scrolled down and never sees it.
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   }
@@ -218,6 +283,17 @@ export function CreateRequestPage() {
 
       <form className="card" style={{ maxWidth: 720 }} onSubmit={submit} noValidate>
         {err && <ErrorBox message={err} onDismiss={() => setErr(null)} />}
+        {created && (
+          <SuccessBox message={L("تم إنشاء الطلب بنجاح.", "Request created successfully.")} onDismiss={() => setCreated(false)} />
+        )}
+        {prefilledFromLast && (
+          <p className="muted" style={{ fontSize: 13 }}>
+            {L("تم تعبئة الحقول ببيانات آخر طلب أنشأته — عدّل ما تغيّر فقط.", "Fields pre-filled from your last request — edit only what changed.")}{" "}
+            <button type="button" className="btn btn--ghost" style={{ padding: "2px 8px" }} onClick={clearPrefilledFields}>
+              {L("مسح الحقول", "Clear fields")}
+            </button>
+          </p>
+        )}
 
         {/* Category first — it drives the rest of the form */}
         <div className="row">
