@@ -19,6 +19,10 @@ const YEAR_KEY = "year";
 const HEAD_ENTERED_KEYS = [YEAR_KEY, HIJRI_KEY, GREGORIAN_KEY];
 /** Fixed key under which the president's chosen title (صفة) is stored in the field values. */
 const PRESIDENT_TITLE_KEY = "presidentTitle";
+/** Free-text add-on typed next to the president's title <select> (for wording the admin-defined
+ *  title list doesn't cover) — folded into PRESIDENT_TITLE_KEY (space-joined) at save time; see
+ *  the PanelMember.titleNote doc comment in client.ts for the equivalent per-member field. */
+const PRESIDENT_TITLE_NOTE_KEY = "presidentTitleNote";
 /** The "panel president" capacity (صفة). At most ONE panel member (president slot or a member) may
  *  carry it — the system prevents designating a second رئيس هيئة. Matches the seeded title name. */
 const PRESIDENT_TITLE_NAME = "رئيس الهيئة";
@@ -44,6 +48,11 @@ const DELEGATION_TITLE = "ندباً";
 
 /** Strip the constrained rich-text markup to plain text — used to tell if a dissent section is empty. */
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+
+/** Fold the title <select> value with its free-text add-on (space-joined) — this is what actually
+ *  gets persisted/printed as the title; the add-on itself is not stored separately (see
+ *  PanelMember.titleNote's doc comment in client.ts). */
+const combineTitle = (title: string, note?: string) => [title, note?.trim()].filter(Boolean).join(" ");
 
 /** Client-only stable ids for section editor rows (keep rich-text instances stable on reorder). */
 let _sid = 0;
@@ -87,7 +96,7 @@ function parseMembers(raw: string | undefined): PanelMember[] {
     return a.map((m) =>
       typeof m === "string"
         ? { judge: m, title: "", dissenting: false, replying: false, delegated: false }
-        : { judge: String(m?.judge ?? m?.name ?? ""), title: String(m?.title ?? ""), dissenting: Boolean(m?.dissenting), replying: Boolean(m?.replying), delegated: Boolean(m?.delegated), delegationDate: String(m?.delegationDate ?? ""), delegationNumber: String(m?.delegationNumber ?? "") });
+        : { judge: String(m?.judge ?? m?.name ?? ""), title: String(m?.title ?? ""), titleNote: String(m?.titleNote ?? ""), dissenting: Boolean(m?.dissenting), replying: Boolean(m?.replying), delegated: Boolean(m?.delegated), delegationDate: String(m?.delegationDate ?? ""), delegationNumber: String(m?.delegationNumber ?? "") });
   } catch { return []; }
 }
 
@@ -372,8 +381,13 @@ export function PreparePage({ id }: { id: string }) {
         }
       }
       const fieldValues = { ...values };
+      // Fold the free-text title add-on into the president's title before saving — combineTitle()
+      // is what actually gets persisted/printed; the add-on itself is not stored separately.
+      if (presidentKey && values[presidentKey]) fieldValues[PRESIDENT_TITLE_KEY] = combineTitle(values[PRESIDENT_TITLE_KEY] ?? "", values[PRESIDENT_TITLE_NOTE_KEY]);
+      delete fieldValues[PRESIDENT_TITLE_NOTE_KEY];
       // When there is no dissent a reply is meaningless — strip any stale reply flags before saving.
-      const persistMembers = hasDissent ? cleanMembers : cleanMembers.map((m) => ({ ...m, replying: false }));
+      const persistMembers = (hasDissent ? cleanMembers : cleanMembers.map((m) => ({ ...m, replying: false })))
+        .map(({ titleNote, ...m }) => ({ ...m, title: combineTitle(m.title, titleNote) }));
       if (membersKey) fieldValues[membersKey] = JSON.stringify(persistMembers);
       if (!hasDissent) fieldValues[PRESIDENT_REPLY_KEY] = "false";
       const payload = {
@@ -474,9 +488,15 @@ export function PreparePage({ id }: { id: string }) {
                           <input style={{ width: 170 }} value={DELEGATION_TITLE} readOnly
                             title={L("صفة القاضي المنتدب — ندباً", "Delegated judge's capacity")} />
                         ) : (
-                          <TitleSelect value={m.title}
-                            disableChair={chairCount >= 1 && m.title !== PRESIDENT_TITLE_NAME}
-                            onPick={(v) => setMembers(members.map((x, idx) => idx === i ? { ...x, title: v } : x))} />
+                          <>
+                            <TitleSelect value={m.title}
+                              disableChair={chairCount >= 1 && m.title !== PRESIDENT_TITLE_NAME}
+                              onPick={(v) => setMembers(members.map((x, idx) => idx === i ? { ...x, title: v } : x))} />
+                            <input style={{ width: 160 }} value={m.titleNote ?? ""} disabled={!m.judge}
+                              placeholder={L("إضافة نصية للصفة (اختياري)", "Extra wording for the title (optional)")}
+                              title={L("تُضاف إلى الصفة وتُطبع معها", "Appended to the title and printed with it")}
+                              onChange={(e) => setMembers(members.map((x, idx) => idx === i ? { ...x, titleNote: e.target.value } : x))} />
+                          </>
                         )}
                         <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
                           title={L("قاضٍ منتدب من غرفة/محكمة أخرى (ندباً)", "Delegated judge from another room/court")}>
@@ -531,9 +551,15 @@ export function PreparePage({ id }: { id: string }) {
                         <input style={{ width: 170 }} value={DELEGATION_TITLE} readOnly
                           title={L("صفة القاضي المنتدب — ندباً", "Delegated judge's capacity")} />
                       ) : (
-                        <TitleSelect value={values[PRESIDENT_TITLE_KEY] ?? ""}
-                          disableChair={chairCount >= 1 && (values[PRESIDENT_TITLE_KEY] ?? "") !== PRESIDENT_TITLE_NAME}
-                          onPick={(v) => setValues((vv) => ({ ...vv, [PRESIDENT_TITLE_KEY]: v }))} />
+                        <>
+                          <TitleSelect value={values[PRESIDENT_TITLE_KEY] ?? ""}
+                            disableChair={chairCount >= 1 && (values[PRESIDENT_TITLE_KEY] ?? "") !== PRESIDENT_TITLE_NAME}
+                            onPick={(v) => setValues((vv) => ({ ...vv, [PRESIDENT_TITLE_KEY]: v }))} />
+                          <input style={{ width: 160 }} value={values[PRESIDENT_TITLE_NOTE_KEY] ?? ""} disabled={!values[fld.key]}
+                            placeholder={L("إضافة نصية للصفة (اختياري)", "Extra wording for the title (optional)")}
+                            title={L("تُضاف إلى الصفة وتُطبع معها", "Appended to the title and printed with it")}
+                            onChange={(e) => setValues((vv) => ({ ...vv, [PRESIDENT_TITLE_NOTE_KEY]: e.target.value }))} />
+                        </>
                       )}
                       <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
                         title={L("قاضٍ منتدب من غرفة/محكمة أخرى (ندباً)", "Delegated judge from another room/court")}>

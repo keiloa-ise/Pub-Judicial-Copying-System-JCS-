@@ -163,7 +163,7 @@ export function CreateRequestPage() {
   // Dismiss the "created successfully" notice once the user actually edits a field again (a fresh
   // edit means they've moved on from the request that notice was about). Doesn't fire right after
   // submit's own applyValues() call, since that sets fields back to their already-current values.
-  useEffect(() => { console.log("[DEBUG] clearing created via draftPayload effect"); setCreated(false); }, [draftPayload]);
+  useEffect(() => { setCreated(false); }, [draftPayload]);
   const autoSave = useAutoSaveDraft({
     userId: user?.userId, role: user?.role,
     formKey: user ? `registry-head:create-copy-request:${user.userId}` : null,
@@ -260,7 +260,6 @@ export function CreateRequestPage() {
       });
       await autoSave.clearDraft(); // JC-32: work is committed — drop the recovery draft
       if (user?.userId) writeLastRequestValues(user.userId, draftPayload); // remember for the next request
-      console.log("[DEBUG] setCreated(true) called");
       setCreated(true);
       applyValues(draftPayload); // re-open the form pre-filled so the next similar request is one edit away
       setPrefilledFromLast(true);
