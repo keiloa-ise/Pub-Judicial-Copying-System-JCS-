@@ -101,14 +101,12 @@ export function ErrorBox({ message, onDismiss }: { message: string | string[]; o
 
 /** Fixed-position toast, always in view regardless of scroll — mirrors ErrorBox but green/success. */
 export function SuccessBox({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
-  console.log("[DEBUG] SuccessBox render", { message });
   const [visible, setVisible] = useState(true);
   const dismissRef = useRef(onDismiss);
 
   useEffect(() => { dismissRef.current = onDismiss; }, [onDismiss]);
 
   useEffect(() => {
-    console.log("[DEBUG] SuccessBox effect fired", { message });
     if (!message) { setVisible(false); return; }
     setVisible(true);
     const timer = window.setTimeout(() => {
@@ -118,7 +116,6 @@ export function SuccessBox({ message, onDismiss }: { message: string; onDismiss?
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  console.log("[DEBUG] SuccessBox about to return", { message, visible });
   if (!message || !visible) return null;
   return <div className="successbox" role="status">{message}</div>;
 }

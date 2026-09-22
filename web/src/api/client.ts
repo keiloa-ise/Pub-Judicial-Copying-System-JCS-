@@ -167,8 +167,11 @@ export interface AssignedUser { id: string; username: string; displayName: strin
 export interface Judge { id: string; name: string; isActive: boolean; roomIds: string[]; }
 /** An admin-defined panel-member title (صفة), e.g. رئيس الهيئة / عضو / مستشار. */
 export interface PanelMemberTitle { id: string; name: string; isActive: boolean; displayOrder: number; }
-/** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim). */
-export interface PanelMember { judge: string; title: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; delegationDate?: string; delegationNumber?: string; }
+/** A judging-panel member as stored on a copy: the judge's name + the chosen title (verbatim).
+ *  `titleNote` is a transient, editor-only free-text add-on: the copyist may type extra wording
+ *  next to the title <select> (for titles the admin-defined list doesn't cover); it is folded into
+ *  `title` (space-joined) at save time and not persisted on its own — see PreparePage's save(). */
+export interface PanelMember { judge: string; title: string; titleNote?: string; dissenting?: boolean; replying?: boolean; delegated?: boolean; delegationDate?: string; delegationNumber?: string; }
 export interface ParagraphTemplate { id: string; title: string; body: string; isArchived: boolean; formTemplateId: string | null; }
 export interface FormField { id: string; key: string; label: string; type: string; validationRulesJson: string | null; order: number; }
 export interface FormTemplate { id: string; name: string; isActive: boolean; fields: FormField[]; }
